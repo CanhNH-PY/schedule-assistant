@@ -1,0 +1,9 @@
+[
+  { "name": "Tết Dương lịch", "date": "2026-01-01", "days_off": 1 },
+  { "name": "Tết Nguyên Đán (nghỉ bù)", "date": "2026-01-26", "days_off": 1 },
+  { "name": "Tết Nguyên Đán", "date": "2026-01-27", "days_off": 5 },
+  { "name": "Giỗ Tổ Hùng Vương", "date": "2026-04-16", "days_off": 1 },
+  { "name": "Ngày Giải phóng miền Nam", "date": "2026-04-30", "days_off": 1 },
+  { "name": "Ngày Quốc tế Lao động", "date": "2026-05-01", "days_off": 1 },
+  { "name": "Quốc khánh", "date": "2026-09-02", "days_off": 2 }
+]
