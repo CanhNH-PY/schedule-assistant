@@ -49,6 +49,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Work Session
   getTodaySession: () => ipcRenderer.invoke('db:getTodaySession'),
   endWorkSession: () => ipcRenderer.invoke('db:endWorkSession'),
+  reopenWorkSession: () => ipcRenderer.invoke('db:reopenWorkSession'),
+
+  // Events
+  getEvents: () => ipcRenderer.invoke('db:getEvents'),
+  createEvent: (ev: object) => ipcRenderer.invoke('db:createEvent', ev),
+  updateEvent: (id: number, ev: object) => ipcRenderer.invoke('db:updateEvent', id, ev),
+  deleteEvent: (id: number) => ipcRenderer.invoke('db:deleteEvent', id),
 
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('db:getSetting', key),

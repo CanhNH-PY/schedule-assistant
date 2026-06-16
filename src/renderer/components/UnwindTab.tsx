@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { WorkSession } from '../../types/index'
 import WeatherWidget from './WeatherWidget'
 import VacationSection from './VacationSection'
+import EventSection from './EventSection'
 import { IconTimer, IconFlag, IconCalendar } from './Icons'
 
 const api = (window as any).electronAPI
@@ -51,6 +52,11 @@ export default function UnwindTab() {
     await api.endWorkSession()
     await loadSession()
     setEnding(false)
+  }
+
+  async function reopenSession() {
+    await api.reopenWorkSession()
+    await loadSession()
   }
 
   const now = new Date()
@@ -115,9 +121,17 @@ export default function UnwindTab() {
                   <span>{ending ? 'Saving...' : 'End Work Session'}</span>
                 </button>
               ) : (
-                <div className="bg-emerald-50 rounded-xl p-4 text-center border border-emerald-100">
-                  <p className="text-emerald-700 font-bold text-sm">Session complete — {formatDur(session.total_minutes || 0)}</p>
-                  <p className="text-emerald-500 text-xs mt-0.5">Great work today! Time to rest.</p>
+                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                  <div className="text-center mb-3">
+                    <p className="text-emerald-700 font-bold text-sm">Session complete — {formatDur(session.total_minutes || 0)}</p>
+                    <p className="text-emerald-500 text-xs mt-0.5">Great work today! Time to rest.</p>
+                  </div>
+                  <button
+                    onClick={reopenSession}
+                    className="w-full border border-emerald-300 text-emerald-600 hover:bg-emerald-100 py-2 rounded-xl text-sm font-semibold transition-colors"
+                  >
+                    ↩ Reopen Session
+                  </button>
                 </div>
               )}
             </>
@@ -147,6 +161,9 @@ export default function UnwindTab() {
 
       {/* Vacations / Trips */}
       <VacationSection />
+
+      {/* Personal Events */}
+      <EventSection />
 
       {/* Upcoming Holidays */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

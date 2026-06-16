@@ -166,6 +166,18 @@ function runMigrations() {
     );
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS events (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      title       TEXT NOT NULL,
+      date        TEXT NOT NULL,
+      is_yearly   INTEGER DEFAULT 0,
+      emoji       TEXT DEFAULT '🎉',
+      notes       TEXT DEFAULT '',
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+  `)
+
   // Add new columns (safe on existing DB)
   try { db.run(`ALTER TABLE daily_tasks ADD COLUMN repeat_type TEXT DEFAULT 'daily'`) } catch {}
   try { db.run(`ALTER TABLE daily_tasks ADD COLUMN repeat_days TEXT DEFAULT '1,2,3,4,5'`) } catch {}

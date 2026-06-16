@@ -165,6 +165,17 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     } catch (e: any) { return { error: e.message } }
   })
 
+  ipcMain.handle('db:reopenWorkSession', () => {
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd')
+      execute(
+        `UPDATE work_sessions SET end_time = NULL, total_minutes = NULL WHERE session_date = ?`,
+        [today]
+      )
+      return { ok: true }
+    } catch (e: any) { return { error: e.message } }
+  })
+
   // --- Meetings ---
   ipcMain.handle('db:getMeetings', (_e, date?: string) => {
     try {
@@ -295,6 +306,40 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('db:deleteVacation', (_e, id: number) => {
     try {
       execute('DELETE FROM vacations WHERE id = ?', [id])
+      return { ok: true }
+    } catch (e: any) { return { error: e.message } }
+  })
+
+  // --- Events ---
+  ipcMain.handle('db:getEvents', () => {
+    try {
+      return queryAll('SELECT * FROM events ORDER BY is_yearly ASC, date ASC')
+    } catch (e: any) { return { error: e.message } }
+  })
+
+  ipcMain.handle('db:createEvent', (_e, ev: any) => {
+    try {
+      const id = execute(
+        `INSERT INTO events (title, date, is_yearly, emoji, notes) VALUES (?, ?, ?, ?, ?)`,
+        [ev.title, ev.date, ev.is_yearly ? 1 : 0, ev.emoji || '🎉', ev.notes || '']
+      )
+      return { id }
+    } catch (e: any) { return { error: e.message } }
+  })
+
+  ipcMain.handle('db:updateEvent', (_e, id: number, ev: any) => {
+    try {
+      execute(
+        `UPDATE events SET title=?, date=?, is_yearly=?, emoji=?, notes=? WHERE id=?`,
+        [ev.title, ev.date, ev.is_yearly ? 1 : 0, ev.emoji || '🎉', ev.notes || '', id]
+      )
+      return { ok: true }
+    } catch (e: any) { return { error: e.message } }
+  })
+
+  ipcMain.handle('db:deleteEvent', (_e, id: number) => {
+    try {
+      execute('DELETE FROM events WHERE id = ?', [id])
       return { ok: true }
     } catch (e: any) { return { error: e.message } }
   })

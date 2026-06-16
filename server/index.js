@@ -118,6 +118,15 @@ function runMigrations() {
       emoji       TEXT DEFAULT '✈️',
       created_at  TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS events (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      title       TEXT NOT NULL,
+      date        TEXT NOT NULL,
+      is_yearly   INTEGER DEFAULT 0,
+      emoji       TEXT DEFAULT '🎉',
+      notes       TEXT DEFAULT '',
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
   `)
 
   try { db.run(`ALTER TABLE daily_tasks ADD COLUMN repeat_type TEXT DEFAULT 'daily'`) } catch {}
@@ -428,6 +437,13 @@ app.get('/api/session/today', (_req, res) => {
   catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+app.post('/api/session/reopen', (_req, res) => {
+  try {
+    execute(`UPDATE work_sessions SET end_time = NULL, total_minutes = NULL WHERE session_date = ?`, [today()])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 app.post('/api/session/end', (_req, res) => {
   try {
     const t = today()
@@ -440,6 +456,41 @@ app.post('/api/session/end', (_req, res) => {
       [et, totalMinutes, t]
     )
     res.json({ ok: true, totalMinutes })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Events ────────────────────────────────────────────────────────────────────
+app.get('/api/events', (_req, res) => {
+  try { res.json(queryAll('SELECT * FROM events ORDER BY is_yearly ASC, date ASC')) }
+  catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.post('/api/events', (req, res) => {
+  try {
+    const ev = req.body
+    const id = execute(
+      `INSERT INTO events (title, date, is_yearly, emoji, notes) VALUES (?, ?, ?, ?, ?)`,
+      [ev.title, ev.date, ev.is_yearly ? 1 : 0, ev.emoji || '🎉', ev.notes || '']
+    )
+    res.json({ id })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.put('/api/events/:id', (req, res) => {
+  try {
+    const ev = req.body
+    execute(
+      `UPDATE events SET title=?, date=?, is_yearly=?, emoji=?, notes=? WHERE id=?`,
+      [ev.title, ev.date, ev.is_yearly ? 1 : 0, ev.emoji || '🎉', ev.notes || '', Number(req.params.id)]
+    )
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/events/:id', (req, res) => {
+  try {
+    execute('DELETE FROM events WHERE id = ?', [Number(req.params.id)])
+    res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

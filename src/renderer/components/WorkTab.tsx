@@ -107,14 +107,16 @@ export default function WorkTab() {
 
   function startEditDaily(task: DailyTask) {
     setEditDId(task.id)
+    const rtype = (task.repeat_type as any) || 'daily'
     const days = task.repeat_days
       ? task.repeat_days.split(',').map(Number).filter(Boolean)
       : [1,2,3,4,5]
-    const dates = task.repeat_dates
-      ? task.repeat_dates.split(',').map(Number).filter(Boolean)
-      : []
+    const dates = (rtype === 'yearly' || !task.repeat_dates)
+      ? []
+      : task.repeat_dates.split(',').map(Number).filter(Boolean)
+    const yearly_date = rtype === 'yearly' ? (task.repeat_dates || '') : ''
     setEditDForm({ title: task.title, priority: task.priority, notify_time: task.notify_time })
-    setEditDRepeat({ repeat_type: (task.repeat_type as any) || 'daily', repeat_days: days, repeat_dates: dates })
+    setEditDRepeat({ repeat_type: rtype, repeat_days: days, repeat_dates: dates, yearly_date })
     setShowDForm(false)
   }
 
@@ -341,6 +343,8 @@ export default function WorkTab() {
                               <span className="text-xs bg-indigo-50 text-indigo-500 border border-indigo-100 px-1.5 py-0.5 rounded-md font-medium">
                                 {task.repeat_type === 'weekly'
                                   ? 'Weekly · ' + (task.repeat_days || '').split(',').map((d:string) => ['','M','T','W','T','F','S','S'][+d] || d).join('')
+                                  : task.repeat_type === 'yearly'
+                                  ? '🔁 Yearly · ' + (task.repeat_dates || '')
                                   : 'Monthly · ' + (task.repeat_dates || '').split(',').join(',')}
                               </span>
                             )}

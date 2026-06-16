@@ -56,6 +56,13 @@
     // Work Session
     getTodaySession: () => call('GET', '/api/session/today'),
     endWorkSession: () => call('POST', '/api/session/end'),
+    reopenWorkSession: () => call('POST', '/api/session/reopen'),
+
+    // Events
+    getEvents: () => call('GET', '/api/events'),
+    createEvent: (ev) => call('POST', '/api/events', ev),
+    updateEvent: (id, ev) => call('PUT', `/api/events/${id}`, ev),
+    deleteEvent: (id) => call('DELETE', `/api/events/${id}`),
 
     // Settings
     getSetting: (key) => call('GET', `/api/settings/${key}`),

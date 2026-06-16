@@ -7,7 +7,7 @@ export interface DailyTask {
   notify_time: string   // "HH:MM"
   is_active: number     // 1 | 0
   created_at: string
-  repeat_type: 'daily' | 'weekly' | 'monthly'
+  repeat_type: 'daily' | 'weekly' | 'monthly' | 'yearly'
   repeat_days: string   // "1,2,3,4,5,6,7" (1=Mon)
   repeat_dates: string | null  // "1,15" for monthly
   completed_at?: string | null
