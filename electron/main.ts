@@ -1,23 +1,13 @@
-import { app, BrowserWindow, ipcMain, protocol, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
 import * as dotenv from 'dotenv'
-import { initDb, getDb } from '../src/db/database'
+import { initDb, execute } from '../src/db/database'
 import { registerIpcHandlers } from '../src/db/ipcHandlers'
 import { startScheduler, stopScheduler } from './scheduler'
 
 dotenv.config()
 
 let mainWindow: BrowserWindow | null = null
-
-// Đăng ký deep link protocol scheduleapp://
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('scheduleapp', process.execPath, [process.argv[1]])
-  }
-} else {
-  app.setAsDefaultProtocolClient('scheduleapp')
-}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -45,19 +35,21 @@ function createWindow() {
 
 // Xử lý deep link scheduleapp://complete?task_id=X&date=YYYY-MM-DD
 function handleDeepLink(url: string) {
-  const parsed = new URL(url)
-  if (parsed.hostname === 'complete') {
-    const taskId = parseInt(parsed.searchParams.get('task_id') ?? '0')
-    const date = parsed.searchParams.get('date') ?? ''
-    if (taskId && date) {
-      const db = getDb()
-      db.prepare(`
-        UPDATE daily_task_logs SET completed_at = datetime('now')
-        WHERE task_id = ? AND log_date = ? AND completed_at IS NULL
-      `).run(taskId, date)
-      mainWindow?.webContents.send('task:completed', { taskId, date })
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname === 'complete') {
+      const taskId = parseInt(parsed.searchParams.get('task_id') ?? '0')
+      const date = parsed.searchParams.get('date') ?? ''
+      if (taskId && date) {
+        execute(
+          `UPDATE daily_task_logs SET completed_at = datetime('now')
+           WHERE task_id = ? AND log_date = ? AND completed_at IS NULL`,
+          [taskId, date]
+        )
+        mainWindow?.webContents.send('task:completed', { taskId, date })
+      }
     }
-  }
+  } catch (_) {}
 }
 
 app.whenReady().then(async () => {
