@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E3A5F"/>
+      <stop offset="100%" style="stop-color:#2E5FA3"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4F7EC8"/>
+      <stop offset="100%" style="stop-color:#3A6BB5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="256" height="256" rx="48" ry="48" fill="url(#bg)"/>
+
+  <!-- Calendar body -->
+  <rect x="40" y="72" width="176" height="148" rx="14" ry="14" fill="white" opacity="0.95"/>
+
+  <!-- Calendar top bar -->
+  <rect x="40" y="72" width="176" height="52" rx="14" ry="14" fill="url(#top)"/>
+  <rect x="40" y="100" width="176" height="24" fill="url(#top)"/>
+
+  <!-- Hook left -->
+  <rect x="80" y="48" width="16" height="44" rx="8" ry="8" fill="#7BA7D4"/>
+  <!-- Hook right -->
+  <rect x="160" y="48" width="16" height="44" rx="8" ry="8" fill="#7BA7D4"/>
+
+  <!-- Month label dots (calendar grid hint) -->
+  <!-- Row 1 -->
+  <rect x="60" y="144" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="90" y="144" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="120" y="144" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="150" y="144" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="180" y="144" width="22" height="18" rx="5" fill="#E8EEF6"/>
+
+  <!-- Row 2 -->
+  <rect x="60" y="170" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="90" y="170" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="120" y="170" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="150" y="170" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="180" y="170" width="22" height="18" rx="5" fill="#E8EEF6"/>
+
+  <!-- Row 3 -->
+  <rect x="60" y="196" width="22" height="18" rx="5" fill="#E8EEF6"/>
+  <rect x="90" y="196" width="22" height="18" rx="5" fill="#E8EEF6"/>
+
+  <!-- Checkmark circle (green, bottom right) -->
+  <circle cx="182" cy="198" r="32" fill="#22C55E"/>
+  <circle cx="182" cy="198" r="28" fill="#16A34A"/>
+  <!-- Checkmark path -->
+  <polyline points="168,198 178,210 198,186" fill="none" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
