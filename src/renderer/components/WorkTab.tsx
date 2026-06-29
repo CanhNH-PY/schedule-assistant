@@ -17,18 +17,19 @@ const PRIORITY_OPTS: { value: Priority; label: string }[] = [
   { value: 'low',    label: 'Low' },
 ]
 
-const P_STYLE: Record<Priority, { bg: string; text: string; border: string }> = {
-  high:   { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
-  medium: { bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' },
-  low:    { bg: '#F0FDF4', text: '#16A34A', border: '#BBF7D0' },
+const P_STYLE: Record<Priority, { dot: string; text: string }> = {
+  high:   { dot: '#EF4444', text: '#EF4444' },
+  medium: { dot: '#F59E0B', text: '#F59E0B' },
+  low:    { dot: '#22C55E', text: '#22C55E' },
 }
 
 function Badge({ priority }: { priority: Priority }) {
   const s = P_STYLE[priority]
+  const label = PRIORITY_OPTS.find(p => p.value === priority)?.label
   return (
-    <span className="text-xs px-2 py-0.5 rounded-md font-semibold border"
-      style={{ backgroundColor: s.bg, color: s.text, borderColor: s.border }}>
-      {PRIORITY_OPTS.find(p => p.value === priority)?.label}
+    <span className="flex items-center gap-1 text-xs font-medium" style={{ color: s.text }}>
+      <span className="w-1.5 h-1.5 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: s.dot }} />
+      {label}
     </span>
   )
 }
@@ -42,6 +43,8 @@ export default function WorkTab() {
   const [completedIds, setCompletedIds] = useState<Set<number>>(new Set())
   const [dailyOpen, setDailyOpen]       = useState(true)
   const [stratOpen, setStratOpen]       = useState(true)
+  const [completedGoalsOpen, setCompletedGoalsOpen] = useState(false)
+  const [subtaskCounts, setSubtaskCounts] = useState<Record<number, { done: number; total: number }>>({})
   const [showDForm, setShowDForm]       = useState(false)
   const [showSForm, setShowSForm]       = useState(false)
 
@@ -69,7 +72,13 @@ export default function WorkTab() {
       api.getDailySummary(todayStr()),
       api.getStrategicTasks(),
     ])
-    setDailyTasks((tasks || []).filter((t: DailyTask) => t.is_active === 1))
+    const today = todayStr()
+    setDailyTasks((tasks || []).filter((t: DailyTask) => {
+      if (t.is_active !== 1) return false
+      // Hide non-recurring tasks completed on a previous day
+      if (!t.repeat_type && t.last_completed_date && t.last_completed_date < today) return false
+      return true
+    }))
     const done = new Set<number>(
       ((sum?.completed_tasks) || []).map((t: any) => Number(t.task_id))
     )
@@ -80,9 +89,18 @@ export default function WorkTab() {
     setStrategic(strats || [])
   }
 
+  function notifyPlan() { window.dispatchEvent(new CustomEvent('schedule-updated')) }
+
   async function complete(id: number) {
     await api.completeTask(id, todayStr())
     setCompletedIds(p => new Set([...p, id]))
+    notifyPlan()
+  }
+
+  async function uncomplete(id: number) {
+    await api.uncompleteTask(id, todayStr())
+    setCompletedIds(p => { const s = new Set(p); s.delete(id); return s })
+    notifyPlan()
   }
 
   async function deleteDaily(id: number) {
@@ -142,6 +160,7 @@ export default function WorkTab() {
   async function updateProgress(id: number, progress: number) {
     await api.updateStrategicProgress(id, progress)
     setStrategic(p => p.map(t => t.id === id ? { ...t, progress } : t))
+    notifyPlan()
   }
 
   async function addStrat(e: React.FormEvent) {
@@ -179,67 +198,72 @@ export default function WorkTab() {
     load()
   }
 
-  const doneCount  = dailyTasks.filter(t => completedIds.has(t.id)).length
-  const dailyPct   = dailyTasks.length ? Math.round((doneCount / dailyTasks.length) * 100) : 0
-  const stratAvg   = strategic.length  ? Math.round(strategic.reduce((s, t) => s + t.progress, 0) / strategic.length) : 0
+  const doneCount       = dailyTasks.filter(t => completedIds.has(t.id)).length
+  const dailyPct        = dailyTasks.length ? Math.round((doneCount / dailyTasks.length) * 100) : 0
+  const activeStrategic    = strategic.filter(t => t.progress < 100)
+  const completedStrategic = strategic.filter(t => t.progress >= 100)
+  const stratAvg        = activeStrategic.length ? Math.round(activeStrategic.reduce((s, t) => s + t.progress, 0) / activeStrategic.length) : 0
 
   return (
     <div className="space-y-3">
       {/* Summary row */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Daily Completion</p>
-          <div className="flex items-end gap-1 mt-1.5">
-            <span className="text-3xl font-black text-indigo-600">{doneCount}</span>
-            <span className="text-sm text-gray-400 mb-0.5">/ {dailyTasks.length} tasks</span>
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="bg-white rounded-2xl px-4 py-3.5 border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-2.5">
+            <p className="text-xs font-semibold text-slate-400 tracking-wide uppercase">Tasks</p>
+            <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg">{dailyPct}%</span>
           </div>
-          <div className="mt-2.5 bg-gray-100 rounded-full h-1.5">
-            <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: dailyPct + '%' }} />
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-slate-800">{doneCount}</span>
+            <span className="text-sm text-slate-400">/ {dailyTasks.length}</span>
           </div>
-          <p className="text-xs text-gray-400 mt-1">{dailyPct}% done today</p>
+          <div className="mt-2.5 bg-slate-100 rounded-full h-1">
+            <div className="bg-indigo-500 h-1 rounded-full transition-all" style={{ width: dailyPct + '%' }} />
+          </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Goal Progress</p>
-          <div className="flex items-end gap-1 mt-1.5">
-            <span className="text-3xl font-black text-violet-600">{stratAvg}</span>
-            <span className="text-sm text-gray-400 mb-0.5">% avg</span>
+        <div className="bg-white rounded-2xl px-4 py-3.5 border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-2.5">
+            <p className="text-xs font-semibold text-slate-400 tracking-wide uppercase">Goals</p>
+            <span className="text-xs font-bold text-violet-500 bg-violet-50 px-2 py-0.5 rounded-lg">{stratAvg}%</span>
           </div>
-          <div className="mt-2.5 bg-gray-100 rounded-full h-1.5">
-            <div className="bg-violet-500 h-1.5 rounded-full transition-all" style={{ width: stratAvg + '%' }} />
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-slate-800">{activeStrategic.length}</span>
+            <span className="text-sm text-slate-400">active</span>
           </div>
-          <p className="text-xs text-gray-400 mt-1">{strategic.length} active goals</p>
+          <div className="mt-2.5 bg-slate-100 rounded-full h-1">
+            <div className="bg-violet-500 h-1 rounded-full transition-all" style={{ width: stratAvg + '%' }} />
+          </div>
         </div>
       </div>
 
       {/* Daily Tasks */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div
-          className="flex items-center gap-3 px-4 py-3.5 cursor-pointer border-b border-gray-50"
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-50"
           onClick={() => setDailyOpen(o => !o)}
-          style={{ background: 'linear-gradient(to right, #EEF2FF, #F5F3FF)' }}
         >
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
-            <IconCheckCircle size={15} className="text-white" />
+          <div className="w-7 h-7 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+            <IconCheckCircle size={14} className="text-indigo-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-gray-800 text-sm">Daily Tasks</p>
-            <p className="text-xs text-gray-500">{doneCount} of {dailyTasks.length} completed today</p>
+            <p className="font-semibold text-slate-800 text-sm">Daily Tasks</p>
+            <p className="text-xs text-slate-400">{doneCount} of {dailyTasks.length} done today</p>
           </div>
           <button
             onClick={e => { e.stopPropagation(); setShowDForm(v => !v); setEditDId(null) }}
-            className="flex items-center gap-1 bg-indigo-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors"
+            className="flex items-center gap-1 text-indigo-600 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-indigo-100 hover:bg-indigo-50 transition-colors"
           >
-            <IconPlus size={13} />
+            <IconPlus size={12} />
             <span>Add</span>
           </button>
-          {dailyOpen ? <IconChevronUp size={16} className="text-gray-400" /> : <IconChevronDown size={16} className="text-gray-400" />}
+          {dailyOpen ? <IconChevronUp size={15} className="text-slate-300" /> : <IconChevronDown size={15} className="text-slate-300" />}
         </div>
 
         {dailyOpen && (
           <div className="px-4 pb-4">
             {/* Add form */}
             {showDForm && (
-              <form onSubmit={addDaily} className="mt-3 p-3.5 bg-indigo-50 rounded-xl space-y-3 border border-indigo-100">
+              <form onSubmit={addDaily} className="mt-3 p-3.5 bg-slate-50 rounded-xl space-y-3 border border-slate-100">
                 <input
                   required autoFocus
                   placeholder="Task name..."
@@ -271,11 +295,11 @@ export default function WorkTab() {
             )}
 
             {dailyTasks.length === 0 && !showDForm ? (
-              <div className="py-8 text-center">
-                <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-2">
-                  <IconCheckCircle size={20} className="text-gray-300" />
+              <div className="py-7 text-center">
+                <div className="w-9 h-9 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-2">
+                  <IconCheckCircle size={18} className="text-slate-300" />
                 </div>
-                <p className="text-gray-400 text-sm">No tasks yet. Click Add to create one.</p>
+                <p className="text-slate-400 text-sm">No tasks yet. Click Add to create one.</p>
               </div>
             ) : (
               <div className="space-y-2 mt-3">
@@ -321,7 +345,7 @@ export default function WorkTab() {
 
                   return (
                     <div key={task.id}
-                      className={'p-3 rounded-xl border transition-all ' + (done ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 hover:border-indigo-200 hover:shadow-sm')}
+                      className={'px-3 py-2.5 rounded-xl border transition-all ' + (done ? 'bg-emerald-50/40 border-emerald-100/80' : 'bg-white border-slate-100 hover:border-indigo-200/60 hover:shadow-sm')}
                     >
                       {/* Top row */}
                       <div className="flex items-center gap-3 cursor-pointer" onClick={() => !done && startEditDaily(task)}>
@@ -333,7 +357,7 @@ export default function WorkTab() {
                           {done && <IconCheckCircle size={11} className="text-white" />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className={'text-sm font-medium ' + (done ? 'line-through text-gray-400' : 'text-gray-800')}>{task.title}</p>
+                          <p className={'text-sm font-medium ' + (done ? 'text-emerald-700' : 'text-slate-800')}>{task.title}</p>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <div className="flex items-center gap-1">
                               <IconClock size={10} className="text-gray-400" />
@@ -351,9 +375,19 @@ export default function WorkTab() {
                             {(!task.repeat_type || task.repeat_type === 'daily') && (
                               <span className="text-xs text-gray-400">Weekdays</span>
                             )}
+                            {done && <span className="text-xs text-emerald-500 font-medium">Done today</span>}
                           </div>
                         </div>
                         <Badge priority={task.priority} />
+                        {done && (
+                          <button
+                            title="Reopen task"
+                            onClick={e => { e.stopPropagation(); uncomplete(task.id) }}
+                            className="text-emerald-400 hover:text-amber-500 transition-colors ml-1 text-xs font-bold px-1.5 py-0.5 rounded border border-emerald-200 hover:border-amber-300"
+                          >
+                            ↩
+                          </button>
+                        )}
                         <button
                           onClick={e => { e.stopPropagation(); deleteDaily(task.id) }}
                           className="text-gray-300 hover:text-red-400 transition-colors ml-1"
@@ -373,34 +407,33 @@ export default function WorkTab() {
       </div>
 
       {/* Strategic Goals */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div
-          className="flex items-center gap-3 px-4 py-3.5 cursor-pointer border-b border-gray-50"
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-50"
           onClick={() => setStratOpen(o => !o)}
-          style={{ background: 'linear-gradient(to right, #F5F3FF, #FDF4FF)' }}
         >
-          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center flex-shrink-0">
-            <IconTarget size={15} className="text-white" />
+          <div className="w-7 h-7 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
+            <IconTarget size={14} className="text-violet-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-gray-800 text-sm">Strategic Goals</p>
-            <p className="text-xs text-gray-500">{strategic.length} goals · {stratAvg}% average progress</p>
+            <p className="font-semibold text-slate-800 text-sm">Strategic Goals</p>
+            <p className="text-xs text-slate-400">{activeStrategic.length} active · {stratAvg}% avg</p>
           </div>
           <button
             onClick={e => { e.stopPropagation(); setShowSForm(v => !v); setEditSId(null) }}
-            className="flex items-center gap-1 bg-violet-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-violet-700 transition-colors"
+            className="flex items-center gap-1 text-violet-600 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-violet-100 hover:bg-violet-50 transition-colors"
           >
-            <IconPlus size={13} />
+            <IconPlus size={12} />
             <span>Add</span>
           </button>
-          {stratOpen ? <IconChevronUp size={16} className="text-gray-400" /> : <IconChevronDown size={16} className="text-gray-400" />}
+          {stratOpen ? <IconChevronUp size={15} className="text-slate-300" /> : <IconChevronDown size={15} className="text-slate-300" />}
         </div>
 
         {stratOpen && (
           <div className="px-4 pb-4">
             {/* Add form */}
             {showSForm && (
-              <form onSubmit={addStrat} className="mt-3 p-3.5 bg-violet-50 rounded-xl space-y-3 border border-violet-100">
+              <form onSubmit={addStrat} className="mt-3 p-3.5 bg-slate-50 rounded-xl space-y-3 border border-slate-100">
                 <input
                   required autoFocus
                   placeholder="Goal name..."
@@ -431,16 +464,16 @@ export default function WorkTab() {
               </form>
             )}
 
-            {strategic.length === 0 && !showSForm ? (
-              <div className="py-8 text-center">
-                <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-2">
-                  <IconTarget size={20} className="text-gray-300" />
+            {activeStrategic.length === 0 && !showSForm ? (
+              <div className="py-7 text-center">
+                <div className="w-9 h-9 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-2">
+                  <IconTarget size={18} className="text-slate-300" />
                 </div>
-                <p className="text-gray-400 text-sm">No goals yet. Click Add to get started.</p>
+                <p className="text-slate-400 text-sm">No active goals. Click Add to get started.</p>
               </div>
             ) : (
               <div className="space-y-2.5 mt-3">
-                {strategic.map(task => {
+                {activeStrategic.map(task => {
                   const daysLeft = Math.ceil((new Date(task.deadline).getTime() - Date.now()) / 86400000)
                   const overdue  = daysLeft < 0
                   const urgent   = !overdue && daysLeft <= 3
@@ -482,50 +515,71 @@ export default function WorkTab() {
                     )
                   }
 
+                  const sc = subtaskCounts[task.id]
+
                   return (
                     <div key={task.id}
-                      className="p-3.5 rounded-xl border border-gray-100 bg-white hover:shadow-sm transition-all cursor-pointer"
-                      onClick={() => startEditStrat(task)}
+                      className="rounded-xl border border-slate-100 bg-white hover:shadow-sm hover:border-violet-200/60 transition-all overflow-hidden"
                     >
-                      <div className="flex items-start gap-2 mb-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-semibold text-gray-800">{task.title}</p>
-                            <Badge priority={task.priority} />
-                          </div>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <div className="flex items-center gap-1">
-                              <IconCalendar size={11} className={overdue ? 'text-red-400' : urgent ? 'text-amber-500' : 'text-gray-400'} />
-                              <p className={'text-xs font-medium ' + (overdue ? 'text-red-500' : urgent ? 'text-amber-600' : 'text-gray-400')}>
-                                {overdue ? 'Overdue — ' + task.deadline : urgent ? daysLeft + 'd left — ' + task.deadline : task.deadline + ' (' + daysLeft + 'd)'}
+                      {/* Goal header — click to edit */}
+                      <div
+                        className="px-3.5 pt-3 pb-2.5 cursor-pointer"
+                        onClick={() => startEditStrat(task)}
+                      >
+                        <div className="flex items-start gap-2 mb-2.5">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-semibold text-slate-800">{task.title}</p>
+                              <Badge priority={task.priority} />
+                              {sc && sc.total > 0 && (
+                                <span className="text-xs text-violet-500 bg-violet-50 px-1.5 py-0.5 rounded-lg font-medium">
+                                  {sc.done}/{sc.total} steps
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <IconCalendar size={10} className={overdue ? 'text-red-400' : urgent ? 'text-amber-500' : 'text-slate-300'} />
+                              <p className={'text-xs ' + (overdue ? 'text-red-500 font-medium' : urgent ? 'text-amber-500 font-medium' : 'text-slate-400')}>
+                                {overdue ? 'Overdue · ' + task.deadline : urgent ? daysLeft + 'd left · ' + task.deadline : task.deadline}
                               </p>
                             </div>
-                            <span className="text-xs text-violet-300 ml-auto">tap to edit</span>
                           </div>
+                          <div className="text-right flex-shrink-0 mr-1">
+                            <p className="text-xl font-bold text-violet-600 leading-none">{task.progress}<span className="text-xs font-normal text-slate-400">%</span></p>
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); deleteStrat(task.id) }}
+                            className="text-slate-200 hover:text-red-400 transition-colors mt-0.5"
+                          >
+                            <IconX size={15} />
+                          </button>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-lg font-black text-violet-600">{task.progress}<span className="text-xs font-normal text-gray-400">%</span></p>
+                        <div className="bg-slate-100 rounded-full h-1.5 mb-2">
+                          <div
+                            className={'h-1.5 rounded-full transition-all ' + (task.progress >= 100 ? 'bg-emerald-500' : 'bg-violet-500')}
+                            style={{ width: task.progress + '%' }}
+                          />
                         </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); deleteStrat(task.id) }}
-                          className="text-gray-300 hover:text-red-400 transition-colors mt-0.5"
-                        >
-                          <IconX size={16} />
-                        </button>
-                      </div>
-                      <div className="bg-gray-100 rounded-full h-2 mb-2">
-                        <div
-                          className={'h-2 rounded-full transition-all ' + (task.progress >= 100 ? 'bg-emerald-500' : 'bg-violet-500')}
-                          style={{ width: task.progress + '%' }}
+                        <input
+                          type="range" min={0} max={100} value={task.progress}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => { e.stopPropagation(); updateProgress(task.id, Number(e.target.value)) }}
+                          className="w-full accent-violet-500 h-1"
                         />
                       </div>
-                      <input
-                        type="range" min={0} max={100} value={task.progress}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => { e.stopPropagation(); updateProgress(task.id, Number(e.target.value)) }}
-                        className="w-full accent-violet-600"
-                      />
-                      <SubtaskList parentType="strategic" parentId={task.id} accentColor="#7C3AED" />
+
+                      {/* Subtasks section — always visible, separated */}
+                      <div className="border-t border-slate-100 px-3.5 pb-3">
+                        <SubtaskList
+                          parentType="strategic"
+                          parentId={task.id}
+                          accentColor="#7C3AED"
+                          defaultOpen={true}
+                          onCountChange={(done, total) =>
+                            setSubtaskCounts(p => ({ ...p, [task.id]: { done, total } }))
+                          }
+                        />
+                      </div>
                     </div>
                   )
                 })}
@@ -534,6 +588,47 @@ export default function WorkTab() {
           </div>
         )}
       </div>
+
+      {/* Completed Goals */}
+      {completedStrategic.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div
+            className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+            onClick={() => setCompletedGoalsOpen(o => !o)}
+            style={{ background: 'linear-gradient(to right, #F0FDF4, #ECFDF5)' }}
+          >
+            <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
+              <IconCheckCircle size={14} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-gray-700 text-sm">Completed Goals</p>
+              <p className="text-xs text-gray-400">{completedStrategic.length} goals at 100%</p>
+            </div>
+            {completedGoalsOpen ? <IconChevronUp size={16} className="text-gray-400" /> : <IconChevronDown size={16} className="text-gray-400" />}
+          </div>
+          {completedGoalsOpen && (
+            <div className="px-4 pb-4 space-y-2.5 mt-3">
+              {completedStrategic.map(task => (
+                <div key={task.id} className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/50 flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <IconCheckCircle size={13} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-700 line-through decoration-emerald-400">{task.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{task.deadline} · <Badge priority={task.priority} /></p>
+                  </div>
+                  <button
+                    onClick={() => deleteStrat(task.id)}
+                    className="text-gray-300 hover:text-red-400 transition-colors"
+                  >
+                    <IconX size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Meetings */}
       <MeetingSection />

@@ -130,23 +130,60 @@ export function startScheduler(win: BrowserWindow | null) {
 
   // ── Every minute: Study item notifications ───────────────────────────────
   tasks.push(
-    cron.schedule('* * * * *', () => {
+    cron.schedule('* * * * *', async () => {
       if (isHoliday(getCurrentDate())) return
-      const now  = getCurrentTime()
-      const dow  = todayDow()  // 1=Mon … 7=Sun
+      const now   = getCurrentTime()
+      const today = getCurrentDate()
+      const dow   = todayDow()
 
       const items = queryAll(
-        'SELECT * FROM study_items WHERE notify_time = ? AND notify_time IS NOT NULL',
-        [now]
+        `SELECT si.* FROM study_items si
+         WHERE si.notify_time IS NOT NULL
+           AND (',' || si.notify_days || ',') LIKE '%,' || ? || ',%'`,
+        [String(dow)]
       )
-      for (const item of items) {
-        const days = (item.notify_days as string || '1,2,3,4,5').split(',').map(Number)
-        if (!days.includes(dow)) continue
 
-        new Notification({
-          title: 'Schedule Assistant — Study',
-          body:  `Time to study: ${item.title}`,
-        }).show()
+      for (const item of items) {
+        // Ensure study_logs row exists for today
+        const existing = queryOne(
+          'SELECT id FROM study_logs WHERE item_id = ? AND log_date = ?',
+          [item.id, today]
+        )
+        if (!existing) {
+          execute(
+            'INSERT INTO study_logs (item_id, log_date) VALUES (?, ?)',
+            [item.id, today]
+          )
+        }
+
+        const log = queryOne(
+          'SELECT * FROM study_logs WHERE item_id = ? AND log_date = ?',
+          [item.id, today]
+        )
+        if (!log || log.completed_at) continue  // Skip if already done today
+
+        // First notification at scheduled time
+        if (item.notify_time === now && log.notif_count === 0) {
+          new Notification({
+            title: 'Schedule Assistant — Study',
+            body:  `Time to study: ${item.title}`,
+          }).show()
+          await sendStudyEmail(item)
+          execute(
+            'UPDATE study_logs SET notif_count = notif_count + 1 WHERE id = ?',
+            [log.id]
+          )
+        }
+
+        // Repeat every 30 min if not done yet
+        const m = new Date().getMinutes()
+        if ((m === 0 || m === 30) && log.notif_count > 0) {
+          await sendStudyEmail(item)
+          execute(
+            'UPDATE study_logs SET notif_count = notif_count + 1 WHERE id = ?',
+            [log.id]
+          )
+        }
       }
     })
   )
@@ -238,6 +275,17 @@ async function sendStrategicTaskEmail(task: any, daysLeft: number) {
       <p>Deadline: <strong>${task.deadline}</strong></p>
       <p>Current progress: <strong>${task.progress}%</strong></p>
       <p>Time remaining: <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong></p>
+    `,
+  })
+}
+
+async function sendStudyEmail(item: any) {
+  await sendEmail({
+    subject: `[Schedule Assistant] Study reminder: ${item.title}`,
+    html: `
+      <p>Time to study: <strong>${item.title}</strong></p>
+      <p>Category: <strong>${item.category}</strong></p>
+      <p>Current mastery: <strong>${item.progress}%</strong></p>
     `,
   })
 }

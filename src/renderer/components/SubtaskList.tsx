@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { IconPlus, IconX, IconCheckCircle, IconChevronDown, IconChevronUp } from './Icons'
+import { IconPlus, IconX } from './Icons'
 
 const api = (window as any).electronAPI
 
@@ -13,14 +13,20 @@ interface Props {
   parentType: string
   parentId: number
   accentColor?: string
-  /** Callback fired when done-count changes (for badge in parent) */
+  defaultOpen?: boolean
   onCountChange?: (done: number, total: number) => void
 }
 
-export default function SubtaskList({ parentType, parentId, accentColor = '#4F46E5', onCountChange }: Props) {
+export default function SubtaskList({
+  parentType,
+  parentId,
+  accentColor = '#4F46E5',
+  defaultOpen = false,
+  onCountChange,
+}: Props) {
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
-  const [open, setOpen]         = useState(false)
   const [input, setInput]       = useState('')
+  const [open, setOpen]         = useState(defaultOpen)
   const inputRef                = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load() }, [parentId])
@@ -64,81 +70,101 @@ export default function SubtaskList({ parentType, parentId, accentColor = '#4F46
   const pct   = total > 0 ? Math.round((done / total) * 100) : 0
 
   return (
-    <div className="mt-2" onClick={e => e.stopPropagation()}>
-      {/* Toggle bar */}
+    <div className="mt-2.5" onClick={e => e.stopPropagation()}>
+      {/* Header row */}
       <button
         type="button"
         onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-        className="flex items-center gap-1.5 w-full text-left group"
+        className="flex items-center gap-2 w-full text-left mb-1"
       >
-        {/* Mini progress bar */}
-        <div className="flex-1 bg-gray-100 rounded-full h-1 overflow-hidden">
-          {total > 0 && (
-            <div
-              className="h-1 rounded-full transition-all"
-              style={{ width: pct + '%', backgroundColor: accentColor }}
-            />
-          )}
-        </div>
-        <span className="text-xs flex-shrink-0" style={{ color: total > 0 ? accentColor : '#9CA3AF' }}>
-          {total > 0 ? done + '/' + total + ' subtasks' : 'Add subtasks'}
-        </span>
-        <span className="text-gray-300 group-hover:text-gray-400 transition-colors flex-shrink-0">
-          {open ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
-        </span>
+        {total > 0 ? (
+          <>
+            <div className="flex-1 bg-slate-100 rounded-full h-1 overflow-hidden">
+              <div
+                className="h-1 rounded-full transition-all"
+                style={{ width: pct + '%', backgroundColor: accentColor }}
+              />
+            </div>
+            <span className="text-xs font-medium flex-shrink-0" style={{ color: accentColor }}>
+              {done}/{total}
+            </span>
+          </>
+        ) : (
+          <span className="text-xs text-slate-400 flex items-center gap-1">
+            <IconPlus size={10} />
+            Add subtasks
+          </span>
+        )}
+        {total > 0 && (
+          <span className="text-slate-300 flex-shrink-0 text-xs">
+            {open ? '▲' : '▼'}
+          </span>
+        )}
       </button>
 
+      {/* Subtask list */}
       {open && (
-        <div className="mt-2 space-y-1 pl-1">
+        <div className="space-y-1 border-t border-slate-100 pt-2 mt-1">
           {subtasks.map(s => (
-            <div key={s.id} className="flex items-center gap-2 group/sub py-0.5">
+            <div key={s.id} className="flex items-center gap-2 group/sub py-0.5 px-1 rounded-lg hover:bg-slate-50 transition-colors">
               <button
                 type="button"
                 onClick={() => toggle(s.id)}
                 className={'w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ' +
-                  (s.is_done ? 'border-transparent' : 'border-gray-300 hover:border-opacity-70')}
+                  (s.is_done ? 'border-transparent' : 'border-slate-300 hover:border-opacity-70')}
                 style={s.is_done ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
               >
                 {s.is_done === 1 && (
                   <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
               </button>
-              <span className={'text-xs flex-1 ' + (s.is_done ? 'line-through text-gray-400' : 'text-gray-600')}>
+              <span className={'text-xs flex-1 ' + (s.is_done ? 'text-slate-400' : 'text-slate-600 font-medium')}>
                 {s.title}
               </span>
               <button
                 type="button"
                 onClick={() => remove(s.id)}
-                className="text-gray-200 hover:text-red-400 transition-colors opacity-0 group-hover/sub:opacity-100"
+                className="text-slate-200 hover:text-red-400 transition-colors opacity-0 group-hover/sub:opacity-100"
               >
-                <IconX size={12} />
+                <IconX size={11} />
               </button>
             </div>
           ))}
 
-          {/* Inline add */}
-          <div className="flex items-center gap-1.5 mt-1.5">
+          {/* Inline add input */}
+          <div className="flex items-center gap-2 mt-1.5 px-1">
             <div className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
-              <IconPlus size={10} className="text-gray-300" />
+              <IconPlus size={10} className="text-slate-300" />
             </div>
             <input
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-              placeholder="Add a step..."
-              className="flex-1 text-xs text-gray-600 bg-transparent border-b border-dashed border-gray-200 focus:border-gray-400 focus:outline-none py-0.5"
+              placeholder="Add a step... (Enter to save)"
+              className="flex-1 text-xs text-slate-600 bg-transparent border-b border-dashed border-slate-200 focus:border-slate-400 focus:outline-none py-0.5 placeholder:text-slate-300"
             />
             {input && (
               <button type="button" onClick={add}
-                className="text-xs font-semibold px-2 py-0.5 rounded-md text-white flex-shrink-0"
+                className="text-xs font-semibold px-2 py-0.5 rounded-lg text-white flex-shrink-0"
                 style={{ backgroundColor: accentColor }}>
                 Add
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* When collapsed but has subtasks, show inline add on hover */}
+      {!open && (
+        <div
+          className="flex items-center gap-2 px-1 py-0.5 opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+          onClick={e => { e.stopPropagation(); setOpen(true); setTimeout(() => inputRef.current?.focus(), 50) }}
+        >
+          <IconPlus size={10} className="text-slate-300" />
+          <span className="text-xs text-slate-300">Add step</span>
         </div>
       )}
     </div>

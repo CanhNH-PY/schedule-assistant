@@ -14,6 +14,7 @@
     getDailyTasks: () => call('GET', '/api/daily-tasks'),
     createDailyTask: (task) => call('POST', '/api/daily-tasks', task),
     completeTask: (taskId, date) => call('PATCH', `/api/daily-tasks/${taskId}/complete`, { date }),
+    uncompleteTask: (taskId, date) => call('PATCH', `/api/daily-tasks/${taskId}/uncomplete`, { date }),
     updateDailyTask: (id, task) => call('PUT', `/api/daily-tasks/${id}`, task),
     deleteDailyTask: (id) => call('DELETE', `/api/daily-tasks/${id}`),
 
@@ -30,6 +31,8 @@
     updateStudyProgress: (id, progress) => call('PUT', `/api/study-items/${id}/progress`, { progress }),
     updateStudyItem: (id, item) => call('PUT', `/api/study-items/${id}`, item),
     deleteStudyItem: (id) => call('DELETE', `/api/study-items/${id}`),
+    completeStudy: (itemId, date) => call('PATCH', `/api/study-items/${itemId}/complete`, { date }),
+    uncompleteStudy: (itemId, date) => call('PATCH', `/api/study-items/${itemId}/uncomplete`, { date }),
 
     // Meetings
     getMeetings: (date) =>
@@ -38,6 +41,7 @@
     createMeeting: (m) => call('POST', '/api/meetings', m),
     updateMeeting: (id, m) => call('PUT', `/api/meetings/${id}`, m),
     deleteMeeting: (id) => call('DELETE', `/api/meetings/${id}`),
+    setMeetingAttended: (id, attended) => call('PATCH', `/api/meetings/${id}/attended`, { attended }),
 
     // Subtasks
     getSubtasks: (parentType, parentId) =>
@@ -64,6 +68,18 @@
     updateEvent: (id, ev) => call('PUT', `/api/events/${id}`, ev),
     deleteEvent: (id) => call('DELETE', `/api/events/${id}`),
 
+    // Projects
+    getProjects: () => call('GET', '/api/projects'),
+    createProject: (data) => call('POST', '/api/projects', data),
+    updateProject: (id, data) => call('PUT', `/api/projects/${id}`, data),
+    deleteProject: (id) => call('DELETE', `/api/projects/${id}`),
+    getProjectTasks: (projectId) => call('GET', `/api/projects/${projectId}/tasks`),
+    createProjectTask: (task) => call('POST', '/api/project-tasks', task),
+    updateProjectTask: (id, task) => call('PUT', `/api/project-tasks/${id}`, task),
+    deleteProjectTask: (id) => call('DELETE', `/api/project-tasks/${id}`),
+    exportProjectPDF: () => Promise.resolve({ error: 'PDF export only available in desktop app' }),
+    exportProjectExcel: () => Promise.resolve({ error: 'Excel export only available in desktop app' }),
+
     // Settings
     getSetting: (key) => call('GET', `/api/settings/${key}`),
     setSetting: (key, value) => call('PUT', `/api/settings/${key}`, { value }),
@@ -73,5 +89,7 @@
     getDailySummary: (date) => call('GET', `/api/reports/daily-summary/${date}`),
     getMonthlySummary: (year, month) =>
       call('GET', `/api/reports/monthly-summary/${year}/${month}`),
+    getWeeklyReport: (start, end) =>
+      call('GET', `/api/reports/weekly?start=${start}&end=${end}`),
   }
 })()

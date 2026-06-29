@@ -12,11 +12,8 @@ protocols:
       - scheduleapp
 win:
   target:
-    - nsis
-  artifactName: ${productName}-${version}-setup.${ext}
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
+    - dir
+  signAndEditExecutable: false
 mac:
   target:
     - dmg

@@ -12,6 +12,7 @@ interface Meeting {
   location: string
   participants: string
   description: string
+  attended: number | null
 }
 
 const EMPTY: Omit<Meeting, 'id'> = {
@@ -150,31 +151,34 @@ interface CardProps {
   meeting: Meeting
   onEdit: () => void
   onDelete: () => void
+  onAttend: (attended: number | null) => void
   accent: string
 }
 
-function MeetingCard({ meeting: m, onEdit, onDelete, accent }: CardProps) {
+function MeetingCard({ meeting: m, onEdit, onDelete, onAttend, accent }: CardProps) {
   const dur    = duration(m.start_time, m.end_time)
   const today  = isToday(m.date)
   const soon   = isSoon(m.date)
   const parts  = m.participants ? m.participants.split(',').map(s => s.trim()).filter(Boolean) : []
+  const isPast = m.date < new Date().toISOString().slice(0, 10) || today
 
   return (
     <div
-      className={'rounded-xl border p-3.5 transition-all hover:shadow-sm cursor-pointer ' + (today ? 'border-l-4' : '')}
+      className={'rounded-xl border p-3.5 transition-all hover:shadow-sm ' + (today ? 'border-l-4' : '')}
       style={{
-        borderColor: today ? accent : '#E5E7EB',
+        borderColor: m.attended === 1 ? '#10B981' : m.attended === 0 ? '#EF4444' : today ? accent : '#E5E7EB',
         borderLeftColor: today ? accent : undefined,
-        backgroundColor: today ? accent + '06' : 'white',
+        backgroundColor: m.attended === 1 ? '#F0FDF4' : m.attended === 0 ? '#FEF2F2' : today ? accent + '06' : 'white',
       }}
-      onClick={onEdit}
     >
       <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0" onClick={onEdit} style={{ cursor: 'pointer' }}>
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-gray-800">{m.title}</p>
             {today && <span className="text-xs font-bold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: accent }}>TODAY</span>}
             {!today && soon && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">SOON</span>}
+            {m.attended === 1 && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">✓ Attended</span>}
+            {m.attended === 0 && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600">✗ Skipped</span>}
           </div>
 
           <div className="flex items-center gap-1 mt-1">
@@ -210,12 +214,28 @@ function MeetingCard({ meeting: m, onEdit, onDelete, accent }: CardProps) {
           )}
         </div>
 
-        <button
-          onClick={e => { e.stopPropagation(); onDelete() }}
-          className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
-        >
-          <IconX size={15} />
-        </button>
+        <div className="flex flex-col gap-1 flex-shrink-0">
+          {isPast && (
+            <div className="flex gap-1">
+              <button
+                onClick={e => { e.stopPropagation(); onAttend(m.attended === 1 ? null : 1) }}
+                title="Mark attended"
+                className={'w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ' + (m.attended === 1 ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100')}
+              >✓</button>
+              <button
+                onClick={e => { e.stopPropagation(); onAttend(m.attended === 0 ? null : 0) }}
+                title="Mark skipped"
+                className={'w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ' + (m.attended === 0 ? 'bg-red-500 text-white' : 'bg-red-50 text-red-500 hover:bg-red-100')}
+              >✗</button>
+            </div>
+          )}
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+          >
+            <IconX size={13} />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -227,7 +247,6 @@ export default function MeetingSection() {
   const [showForm, setShowForm]   = useState(false)
   const [editId, setEditId]       = useState<number | null>(null)
   const [editData, setEditData]   = useState<Omit<Meeting,'id'> | null>(null)
-  const [viewMode, setViewMode]   = useState<'upcoming' | 'all'>('upcoming')
 
   const accent = '#7C3AED'
 
@@ -257,9 +276,14 @@ export default function MeetingSection() {
     setMeetings(p => p.filter(m => m.id !== id))
   }
 
+  async function handleAttend(id: number, attended: number | null) {
+    await api.setMeetingAttended(id, attended)
+    setMeetings(p => p.map(m => m.id === id ? { ...m, attended } : m))
+  }
+
   function startEdit(m: Meeting) {
     setEditId(m.id)
-    setEditData({ title: m.title, date: m.date, start_time: m.start_time, end_time: m.end_time, location: m.location, participants: m.participants, description: m.description })
+    setEditData({ title: m.title, date: m.date, start_time: m.start_time, end_time: m.end_time, location: m.location, participants: m.participants, description: m.description, attended: m.attended })
     setShowForm(false)
   }
 
@@ -267,31 +291,29 @@ export default function MeetingSection() {
   const groups     = groupByDate(meetings)
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       {/* Header */}
       <div
-        className="flex items-center gap-3 px-4 py-3.5 cursor-pointer border-b border-gray-50"
-        style={{ background: 'linear-gradient(to right, #F5F3FF, #EDE9FE)' }}
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-50"
         onClick={() => setOpen(o => !o)}
       >
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: accent }}>
-          <IconCalendar size={15} className="text-white" />
+        <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 bg-violet-50">
+          <IconCalendar size={14} className="text-violet-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-gray-800 text-sm">Meetings</p>
-          <p className="text-xs text-gray-500">
+          <p className="font-semibold text-slate-800 text-sm">Meetings</p>
+          <p className="text-xs text-slate-400">
             {todayCount > 0 ? `${todayCount} today` : 'No meetings today'} · {meetings.length} upcoming
           </p>
         </div>
         <button
           onClick={e => { e.stopPropagation(); setShowForm(v => !v); setEditId(null) }}
-          className="flex items-center gap-1 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
-          style={{ backgroundColor: accent }}
+          className="flex items-center gap-1 text-violet-600 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-violet-100 hover:bg-violet-50 transition-colors"
         >
-          <IconPlus size={13} />
+          <IconPlus size={12} />
           <span>Add</span>
         </button>
-        {open ? <IconChevronUp size={16} className="text-gray-400" /> : <IconChevronDown size={16} className="text-gray-400" />}
+        {open ? <IconChevronUp size={15} className="text-slate-300" /> : <IconChevronDown size={15} className="text-slate-300" />}
       </div>
 
       {open && (
@@ -348,6 +370,7 @@ export default function MeetingSection() {
                           meeting={m}
                           onEdit={() => startEdit(m)}
                           onDelete={() => handleDelete(m.id)}
+                          onAttend={(attended) => handleAttend(m.id, attended)}
                           accent={accent}
                         />
                       )

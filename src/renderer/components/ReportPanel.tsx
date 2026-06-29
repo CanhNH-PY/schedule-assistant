@@ -3,10 +3,11 @@ import {
   IconX, IconChevronLeft, IconChevronRight,
   IconCheckCircle, IconTimer, IconBook, IconActivity, IconTrophy, IconCalendar, IconClock,
 } from './Icons'
+import ProjectReport from './ProjectReport'
 
 const api = (window as any).electronAPI
 
-type View = 'daily' | 'monthly'
+type View = 'daily' | 'weekly' | 'monthly' | 'project'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DOW    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
@@ -100,8 +101,17 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
       }, 0) / topStudy.length)
     : 0
 
+  // KPI: Meeting attendance
+  const attendedMeetings = meetings.filter((m: any) => m.attended === 1).length
+  const totalMeetings    = meetings.length
+  const meetingKpi       = totalMeetings > 0 ? Math.round((attendedMeetings / totalMeetings) * 100) : 100
+
+  // Score formula (weighted):
+  // Tasks 40% + Session hours 25% (proportional, 8h=full) + Meeting 15% + Study 20%
+  const sessionScore  = Math.min(25, Math.round((sessionMin / 480) * 25))
+  const meetingScore  = totalMeetings > 0 ? Math.round((attendedMeetings / totalMeetings) * 15) : 15
   const score = Math.min(100, Math.round(
-    taskPct * 0.5 + studyAvg * 0.3 + (sessionMin > 0 ? 20 : 0)
+    taskPct * 0.4 + sessionScore + meetingScore + studyAvg * 0.2
   ))
 
   const scoreGradient = score >= 85
@@ -123,29 +133,43 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
 
   return (
     <div className="space-y-3">
-      {/* Score */}
+      {/* Score card */}
       <div className={'rounded-2xl bg-gradient-to-br ' + scoreGradient + ' p-4 text-white'}>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 mb-3">
           <div className="text-center flex-shrink-0">
             <p className="text-5xl font-black leading-none">{score}</p>
             <p className="text-white/60 text-xs mt-0.5">/ 100</p>
           </div>
           <div className="flex-1">
             <p className="text-white font-bold text-sm">{scoreLabel}</p>
-            <div className="mt-2 grid grid-cols-3 gap-1 text-center">
-              <div className="bg-white/15 rounded-lg p-1.5">
-                <p className="text-xs font-black text-white">{taskPct}%</p>
-                <p className="text-white/60 text-xs">Tasks</p>
-              </div>
-              <div className="bg-white/15 rounded-lg p-1.5">
-                <p className="text-xs font-black text-white">{studyAvg}%</p>
-                <p className="text-white/60 text-xs">Study</p>
-              </div>
-              <div className="bg-white/15 rounded-lg p-1.5">
-                <p className="text-xs font-black text-white">{sessionMin > 0 ? formatDur(sessionMin) : '—'}</p>
-                <p className="text-white/60 text-xs">Session</p>
-              </div>
+            <p className="text-white/60 text-xs mt-0.5">Performance score for the day</p>
+            {/* Score bar */}
+            <div className="mt-2 bg-white/20 rounded-full h-2">
+              <div className="bg-white h-2 rounded-full transition-all" style={{ width: score + '%' }} />
             </div>
+          </div>
+        </div>
+        {/* KPI grid */}
+        <div className="grid grid-cols-4 gap-1.5">
+          <div className="bg-white/15 rounded-xl p-2 text-center">
+            <p className="text-sm font-black text-white">{taskPct}%</p>
+            <p className="text-white/60 text-xs leading-tight">Tasks</p>
+            <p className="text-white/40" style={{ fontSize: 9 }}>40pts</p>
+          </div>
+          <div className="bg-white/15 rounded-xl p-2 text-center">
+            <p className="text-sm font-black text-white">{sessionMin > 0 ? formatDur(sessionMin) : '—'}</p>
+            <p className="text-white/60 text-xs leading-tight">Session</p>
+            <p className="text-white/40" style={{ fontSize: 9 }}>25pts</p>
+          </div>
+          <div className="bg-white/15 rounded-xl p-2 text-center">
+            <p className="text-sm font-black text-white">{totalMeetings > 0 ? `${attendedMeetings}/${totalMeetings}` : '—'}</p>
+            <p className="text-white/60 text-xs leading-tight">Meetings</p>
+            <p className="text-white/40" style={{ fontSize: 9 }}>15pts</p>
+          </div>
+          <div className="bg-white/15 rounded-xl p-2 text-center">
+            <p className="text-sm font-black text-white">{studyAvg}%</p>
+            <p className="text-white/60 text-xs leading-tight">Study</p>
+            <p className="text-white/40" style={{ fontSize: 9 }}>20pts</p>
           </div>
         </div>
       </div>
@@ -245,14 +269,25 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
               <IconCalendar size={13} className="text-violet-600" />
             </div>
             <p className="font-bold text-gray-800 text-sm flex-1">Meetings</p>
-            <span className="text-xs text-violet-500 font-bold">{meetings.length}</span>
+            <span className="text-xs text-violet-500 font-bold">
+              {attendedMeetings}/{totalMeetings} attended · {meetingKpi}%
+            </span>
           </div>
           <div className="space-y-2">
             {meetings.map((m: any) => (
-              <div key={m.id} className="p-2.5 rounded-xl bg-violet-50 border border-violet-100">
+              <div key={m.id} className={'p-2.5 rounded-xl border ' + (
+                m.attended === 1 ? 'bg-emerald-50 border-emerald-100' :
+                m.attended === 0 ? 'bg-red-50 border-red-100' :
+                'bg-violet-50 border-violet-100'
+              )}>
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800 truncate">{m.title}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{m.title}</p>
+                      {m.attended === 1 && <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">✓ Attended</span>}
+                      {m.attended === 0 && <span className="text-xs font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded">✗ Skipped</span>}
+                      {m.attended === null && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Unconfirmed</span>}
+                    </div>
                     <div className="flex items-center gap-1 mt-0.5">
                       <IconClock size={10} className="text-violet-400" />
                       <p className="text-xs text-violet-600 font-medium">{m.start_time} – {m.end_time}</p>
@@ -385,6 +420,32 @@ function DailyReport() {
   )
 }
 
+// ── Monthly Report Table (MISA style) ─────────────────────────────────────────
+const MONTH_STATUS = {
+  excellent: { label: 'Excellent', rowBg: '#E2EFDA', cellBg: '#70AD47', cellText: '#fff' },
+  good:      { label: 'Good',      rowBg: '#FFFFC7', cellBg: '#FFD966', cellText: '#333' },
+  fair:      { label: 'Fair',      rowBg: '#FCE4D6', cellBg: '#ED7D31', cellText: '#fff' },
+  missed:    { label: 'Missed',    rowBg: '#FFDEDE', cellBg: '#FF5252', cellText: '#fff' },
+  weekend:   { label: 'Weekend',   rowBg: '#F5F5F5', cellBg: '#BDBDBD', cellText: '#fff' },
+  future:    { label: '—',         rowBg: '#FAFAFA', cellBg: '#E0E0E0', cellText: '#999' },
+  nodata:    { label: 'No data',   rowBg: '#F9FAFB', cellBg: '#D1D5DB', cellText: '#fff' },
+}
+const DOW_VN = ['Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7','Chủ nhật']
+
+function getDayStatus(dateStr: string, today: string, completionMap: Record<string,number>, dailyTaskCounts: Record<string,number>, sessionMap: Record<string,any>) {
+  const dow = new Date(dateStr+'T00:00:00').getDay() // 0=Sun, 6=Sat
+  if (dateStr > today) return 'future'
+  if (dow === 0 || dow === 6) return 'weekend'
+  const done     = completionMap[dateStr] || 0
+  const dayTotal = dailyTaskCounts[dateStr] ?? 0
+  if (dayTotal === 0) return 'nodata'
+  const pct = (done / dayTotal) * 100
+  if (pct >= 100) return 'excellent'
+  if (pct >= 50)  return 'good'
+  if (pct > 0)    return 'fair'
+  return 'missed'
+}
+
 // ── Monthly View ──────────────────────────────────────────────────────────────
 function MonthlyReport() {
   const now = new Date()
@@ -393,6 +454,7 @@ function MonthlyReport() {
   const [monthData, setMonthData] = useState<any>(null)
   const [loadingMonth, setLoadingMonth] = useState(true)
   const [selectedDay, setSelectedDay]   = useState<number | null>(null)
+  const [viewMode, setViewMode] = useState<'calendar'|'report'>('calendar')
 
   useEffect(() => { loadMonth() }, [year, month])
 
@@ -413,104 +475,447 @@ function MonthlyReport() {
 
   const completionMap: Record<string, number> = {}
   const sessionMap:    Record<string, { minutes: number; end: string }> = {}
+  const dailyTaskCounts: Record<string, number> = {}
 
   if (monthData) {
     for (const c of (monthData.dailyCompletions || [])) completionMap[c.log_date] = c.completed
     for (const s of (monthData.sessions || []))          sessionMap[s.session_date] = { minutes: s.total_minutes || 0, end: s.end_time }
+    if (monthData.dailyTaskCounts) Object.assign(dailyTaskCounts, monthData.dailyTaskCounts)
   }
 
-  const totalTasks    = monthData?.totalTasks || 0
   const totalWorkDays = Object.keys(sessionMap).filter(d => sessionMap[d].end).length
   const totalMinutes  = Object.values(sessionMap).reduce((s, v) => s + (v.minutes || 0), 0)
   const totalDone     = Object.values(completionMap).reduce((s, v) => s + v, 0)
+  const successDays   = Object.keys(completionMap).filter(d => {
+    const dt = dailyTaskCounts[d] ?? 0
+    return dt > 0 && (completionMap[d] || 0) >= dt
+  }).length
 
   function dayStyle(dateStr: string) {
     const isPast   = dateStr < today
     const isToday  = dateStr === today
     const isFuture = dateStr > today
     if (isFuture) return { bg: 'bg-gray-50', text: 'text-gray-300', ring: '' }
-    const done = completionMap[dateStr] || 0
-    const pct  = totalTasks > 0 ? (done / totalTasks) * 100 : 0
+    const done     = completionMap[dateStr] || 0
+    const dayTotal = dailyTaskCounts[dateStr] ?? 0
+    const pct      = dayTotal > 0 ? (done / dayTotal) * 100 : 0
     const ring = isToday ? ' ring-2 ring-indigo-400 ring-inset' : ''
-    if (done === 0 && isPast) return { bg: 'bg-gray-50', text: 'text-gray-400', ring }
-    if (pct >= 100)           return { bg: 'bg-emerald-50', text: 'text-emerald-700', ring }
-    if (pct >= 50)            return { bg: 'bg-amber-50',   text: 'text-amber-700',   ring }
-    return                         { bg: 'bg-red-50',     text: 'text-red-600',     ring }
+    if (dayTotal === 0 || (done === 0 && isPast)) return { bg: 'bg-gray-50', text: 'text-gray-400', ring }
+    if (pct >= 100) return { bg: 'bg-emerald-50', text: 'text-emerald-700', ring }
+    if (pct >= 50)  return { bg: 'bg-amber-50',   text: 'text-amber-700',   ring }
+    return               { bg: 'bg-red-50',     text: 'text-red-600',     ring }
   }
 
   const selDateStr = selectedDay ? isoDate(year, month, selectedDay) : null
 
+  // Build rows for MISA report table
+  const reportRows = Array.from({ length: days }, (_, i) => {
+    const day     = i + 1
+    const dateStr = isoDate(year, month, day)
+    const jsDay   = new Date(dateStr+'T00:00:00').getDay()
+    const dowIdx  = jsDay === 0 ? 6 : jsDay - 1
+    const done    = completionMap[dateStr] || 0
+    const total   = dailyTaskCounts[dateStr] ?? 0
+    const pct     = total > 0 ? Math.round((done / total) * 100) : 0
+    const sess    = sessionMap[dateStr]
+    const status  = getDayStatus(dateStr, today, completionMap, dailyTaskCounts, sessionMap)
+    return { day, dateStr, dowIdx, done, total, pct, sess, status }
+  })
+
+  // Status counts for summary
+  const statusSummary = Object.fromEntries(
+    Object.keys(MONTH_STATUS).map(k => [k, reportRows.filter(r => r.status === k).length])
+  )
+
   return (
     <div className="p-5 space-y-4">
-      {/* Month nav */}
-      <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50">
+      {/* Month nav + view toggle */}
+      <div className="flex items-center gap-3">
+        <button onClick={prevMonth} className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors">
           <IconChevronLeft size={16} className="text-gray-600" />
         </button>
-        <div className="text-center">
-          <p className="font-black text-gray-800 text-base">{MONTHS[month - 1]}</p>
-          <p className="text-xs text-gray-400">{year}</p>
+        <div className="flex-1 text-center">
+          <p className="font-black text-gray-800 text-xl">{MONTHS[month - 1]}</p>
+          <p className="text-xs text-gray-400 font-medium">{year}</p>
         </div>
-        <button onClick={nextMonth} className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50">
+        <button onClick={nextMonth} className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors">
           <IconChevronRight size={16} className="text-gray-600" />
         </button>
+        {/* View toggle */}
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-0.5">
+          <button onClick={() => setViewMode('calendar')}
+            className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ' + (viewMode==='calendar' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+            📅 <span>Lịch</span>
+          </button>
+          <button onClick={() => setViewMode('report')}
+            className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ' + (viewMode==='report' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+            📊 <span>Report</span>
+          </button>
+        </div>
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-blue-50 rounded-xl p-3 text-center">
-          <p className="text-xl font-black text-blue-600">{totalDone}</p>
-          <p className="text-xs text-blue-400">Tasks Done</p>
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-blue-50 rounded-2xl p-4 text-center border border-blue-100">
+          <p className="text-2xl font-black text-blue-600">{totalDone}</p>
+          <p className="text-xs text-blue-400 font-semibold mt-0.5">Tasks Done</p>
         </div>
-        <div className="bg-orange-50 rounded-xl p-3 text-center">
-          <p className="text-xl font-black text-orange-600">{totalWorkDays}</p>
-          <p className="text-xs text-orange-400">Work Days</p>
+        <div className="bg-emerald-50 rounded-2xl p-4 text-center border border-emerald-100">
+          <p className="text-2xl font-black text-emerald-600">{successDays}</p>
+          <p className="text-xs text-emerald-400 font-semibold mt-0.5">Perfect Days</p>
         </div>
-        <div className="bg-emerald-50 rounded-xl p-3 text-center">
-          <p className="text-xl font-black text-emerald-600">{formatDur(totalMinutes)}</p>
-          <p className="text-xs text-emerald-400">Total Time</p>
+        <div className="bg-orange-50 rounded-2xl p-4 text-center border border-orange-100">
+          <p className="text-2xl font-black text-orange-600">{totalWorkDays}</p>
+          <p className="text-xs text-orange-400 font-semibold mt-0.5">Work Days</p>
+        </div>
+        <div className="bg-purple-50 rounded-2xl p-4 text-center border border-purple-100">
+          <p className="text-2xl font-black text-purple-600">{formatDur(totalMinutes)}</p>
+          <p className="text-xs text-purple-400 font-semibold mt-0.5">Total Time</p>
         </div>
       </div>
 
-      {/* Calendar grid */}
       {loadingMonth ? (
         <div className="py-8 text-center">
           <div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin mx-auto" />
         </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-gray-100">
-            {DOW.map(d => (
-              <div key={d} className="text-center py-2 text-xs font-bold text-gray-400 uppercase tracking-wide">{d}</div>
+      ) : viewMode === 'calendar' ? (
+        <>
+          {/* Calendar grid */}
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div className="grid grid-cols-7 border-b border-gray-100">
+              {DOW.map(d => (
+                <div key={d} className="text-center py-2 text-xs font-bold text-gray-400 uppercase tracking-wide">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-px bg-gray-100">
+              {Array.from({ length: firstDow }).map((_, i) => (
+                <div key={'e' + i} className="bg-white h-11" />
+              ))}
+              {Array.from({ length: days }).map((_, i) => {
+                const day     = i + 1
+                const dateStr = isoDate(year, month, day)
+                const style    = dayStyle(dateStr)
+                const hasSess  = !!sessionMap[dateStr]
+                const isSelected = selectedDay === day
+                const done     = completionMap[dateStr] || 0
+                const dayTotal = dailyTaskCounts[dateStr] ?? 0
+
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDay(isSelected ? null : day)}
+                    className={'h-11 flex flex-col items-center justify-center gap-0.5 relative transition-all ' + style.bg + style.ring + (isSelected ? ' scale-90' : '')}
+                  >
+                    <span className={'text-xs font-bold ' + style.text}>{day}</span>
+                    {done > 0 && dayTotal > 0 && <span className="text-xs leading-none" style={{ fontSize: 8, color: style.text.includes('emerald') ? '#059669' : style.text.includes('amber') ? '#D97706' : '#DC2626' }}>{done}/{dayTotal}</span>}
+                    {hasSess && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-orange-400 rounded-full" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-3 justify-center flex-wrap">
+            {[
+              { color: 'bg-emerald-500', label: 'All done' },
+              { color: 'bg-amber-400',   label: 'Partial' },
+              { color: 'bg-red-400',     label: 'Missed' },
+              { color: 'bg-gray-300',    label: 'No data' },
+              { color: 'bg-orange-400',  label: 'Session' },
+            ].map(l => (
+              <div key={l.label} className="flex items-center gap-1">
+                <span className={'w-2 h-2 rounded-full ' + l.color} />
+                <span className="text-xs text-gray-500">{l.label}</span>
+              </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-px bg-gray-100">
-            {Array.from({ length: firstDow }).map((_, i) => (
-              <div key={'e' + i} className="bg-white h-11" />
-            ))}
-            {Array.from({ length: days }).map((_, i) => {
-              const day     = i + 1
-              const dateStr = isoDate(year, month, day)
-              const style   = dayStyle(dateStr)
-              const hasSess = !!sessionMap[dateStr]
-              const isSelected = selectedDay === day
-              const done    = completionMap[dateStr] || 0
 
-              return (
-                <button
-                  key={day}
-                  onClick={() => setSelectedDay(isSelected ? null : day)}
-                  className={'h-11 flex flex-col items-center justify-center gap-0.5 relative transition-all ' + style.bg + style.ring + (isSelected ? ' scale-90' : '')}
-                >
-                  <span className={'text-xs font-bold ' + style.text}>{day}</span>
-                  {done > 0 && <span className="text-xs leading-none" style={{ fontSize: 8, color: style.text.includes('emerald') ? '#059669' : style.text.includes('amber') ? '#D97706' : '#DC2626' }}>{done}/{totalTasks}</span>}
-                  {hasSess && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-orange-400 rounded-full" />}
+          {/* Selected day detail */}
+          {selDateStr && (
+            <div className="bg-white rounded-2xl border border-indigo-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-indigo-50 flex items-center justify-between"
+                style={{ background: 'linear-gradient(to right, #EEF2FF, #F5F3FF)' }}>
+                <div>
+                  <p className="font-bold text-gray-800 text-sm">{fmtFullDate(selDateStr)}</p>
+                  <p className="text-xs text-indigo-400">Full day report</p>
+                </div>
+                <button onClick={() => setSelectedDay(null)}
+                  className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
+                  <IconX size={13} className="text-gray-500" />
                 </button>
-              )
-            })}
+              </div>
+              <div className="p-4">
+                <DayDetail date={selDateStr} compact />
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        /* ── MISA Report Table ── */
+        <>
+          {/* Header */}
+          <div className="px-4 py-2.5 font-bold text-white text-sm tracking-widest" style={{ background: '#1F3864' }}>
+            BÁO CÁO HIỆU SUẤT — THÁNG {String(month).padStart(2,'0')}/{year}
+          </div>
+
+          {/* Daily table */}
+          <div className="border border-slate-300 overflow-hidden rounded-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse min-w-max">
+                <thead>
+                  <tr style={{ background: '#1F3864', color: '#fff' }}>
+                    <th className="px-3 py-2 text-center font-bold border-r border-blue-800 w-12">DATE</th>
+                    <th className="px-3 py-2 text-left font-bold border-r border-blue-800 w-20">DAY</th>
+                    <th className="px-3 py-2 text-center font-bold border-r border-blue-800 w-20">TASKS</th>
+                    <th className="px-3 py-2 text-center font-bold border-r border-blue-800 w-16">%</th>
+                    <th className="px-3 py-2 text-center font-bold border-r border-blue-800 w-24">WORK TIME</th>
+                    <th className="px-3 py-2 text-center font-bold w-24">STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportRows.map(({ day, dateStr, dowIdx, done, total, pct, sess, status }) => {
+                    const s = MONTH_STATUS[status as keyof typeof MONTH_STATUS]
+                    const isToday = dateStr === today
+                    return (
+                      <tr key={day} style={{ background: s.rowBg }}
+                        className={'border-b border-slate-200' + (isToday ? ' outline outline-2 outline-indigo-400 outline-offset-[-2px]' : '')}>
+                        <td className="px-3 py-1.5 text-center border-r border-slate-200 font-bold text-slate-700">
+                          {String(day).padStart(2,'0')}/{String(month).padStart(2,'0')}
+                        </td>
+                        <td className="px-3 py-1.5 border-r border-slate-200 text-slate-600">{DOW_VN[dowIdx]}</td>
+                        <td className="px-3 py-1.5 text-center border-r border-slate-200 font-medium text-slate-700">
+                          {total > 0 ? `${done}/${total}` : '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-center border-r border-slate-200">
+                          {total > 0 ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex-1 bg-white/60 rounded-full h-1.5 border border-slate-200">
+                                <div className="h-1.5 rounded-full" style={{ width: pct+'%', background: s.cellBg }} />
+                              </div>
+                              <span className="font-bold w-7 text-right" style={{ color: s.cellBg }}>{pct}%</span>
+                            </div>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-3 py-1.5 text-center border-r border-slate-200 text-slate-600">
+                          {sess?.end ? formatDur(sess.minutes) : sess ? <span className="text-blue-500">ongoing</span> : '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded font-bold text-xs"
+                            style={{ background: s.cellBg, color: s.cellText }}>
+                            {s.label}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Summary 2×2 */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Status breakdown */}
+            <div className="border border-slate-300 overflow-hidden rounded-sm">
+              <div className="px-3 py-2 font-bold text-slate-800 uppercase tracking-wide text-xs" style={{ background: '#D9E1F2' }}>
+                TÌNH TRẠNG NGÀY TRONG THÁNG
+              </div>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr style={{ background: '#1F3864', color: '#fff' }}>
+                    <th className="px-3 py-1.5 text-left font-bold border-r border-blue-800">STATUS</th>
+                    <th className="px-3 py-1.5 text-center font-bold border-r border-blue-800 w-14">COUNT</th>
+                    <th className="px-3 py-1.5 text-center font-bold w-12">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(['excellent','good','fair','missed','nodata'] as const).map(k => {
+                    const s = MONTH_STATUS[k]
+                    const cnt = statusSummary[k] || 0
+                    const workdays = reportRows.filter(r => r.status !== 'weekend' && r.status !== 'future').length
+                    return (
+                      <tr key={k} style={{ background: s.rowBg }} className="border-b border-slate-200">
+                        <td className="px-3 py-1.5 border-r border-slate-200">
+                          <span className="inline-block px-2 py-0.5 rounded font-bold text-xs"
+                            style={{ background: s.cellBg, color: s.cellText }}>{s.label}</span>
+                        </td>
+                        <td className="px-3 py-1.5 text-center border-r border-slate-200 font-medium">{cnt}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-500">
+                          {workdays > 0 ? Math.round(cnt/workdays*100) : 0}%
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  <tr style={{ background: '#D9E1F2' }} className="font-bold border-t-2 border-slate-300">
+                    <td className="px-3 py-1.5 border-r border-slate-200">TOTAL</td>
+                    <td className="px-3 py-1.5 text-center border-r border-slate-200">{days}</td>
+                    <td className="px-3 py-1.5 text-center">100%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Work time summary */}
+            <div className="border border-slate-300 overflow-hidden rounded-sm self-start">
+              <div className="px-3 py-2 font-bold text-slate-800 uppercase tracking-wide text-xs" style={{ background: '#D9E1F2' }}>
+                THỐNG KÊ THÁNG
+              </div>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {[
+                    { label: 'Tasks hoàn thành', value: String(totalDone), bg: '#E2EFDA', color: '#375623' },
+                    { label: 'Ngày hoàn hảo',    value: String(successDays), bg: '#E2EFDA', color: '#375623' },
+                    { label: 'Ngày làm việc',    value: String(totalWorkDays), bg: '#DDEBF7', color: '#1F497D' },
+                    { label: 'Tổng thời gian',   value: formatDur(totalMinutes), bg: '#DDEBF7', color: '#1F497D' },
+                    { label: 'TB giờ/ngày',      value: totalWorkDays > 0 ? formatDur(Math.round(totalMinutes/totalWorkDays)) : '—', bg: '#FFF2CC', color: '#7F6000' },
+                  ].map(({ label, value, bg, color }) => (
+                    <tr key={label} style={{ background: bg }} className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 border-r border-slate-200 font-medium" style={{ color }}>{label}</td>
+                      <td className="px-3 py-1.5 text-right font-bold" style={{ color }}>{value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Weekly Report ─────────────────────────────────────────────────────────────
+function WeeklyReport() {
+  const [weekData, setWeekData] = useState<any>(null)
+  const [loading, setLoading]   = useState(true)
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+
+  function getWeekRange() {
+    const now = new Date()
+    const day = now.getDay()
+    const mon = new Date(now); mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1))
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+    const start = mon.toISOString().slice(0, 10)
+    const end   = sun.toISOString().slice(0, 10)
+    const days: string[] = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mon); d.setDate(mon.getDate() + i)
+      days.push(d.toISOString().slice(0, 10))
+    }
+    return { start, end, days }
+  }
+
+  const { start, end, days } = getWeekRange()
+  const today = todayStr()
+
+  useEffect(() => {
+    api.getWeeklyReport(start, end).then((d: any) => { setWeekData(d); setLoading(false) })
+  }, [])
+
+  if (loading) return (
+    <div className="p-5 py-10 text-center">
+      <div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+    </div>
+  )
+
+  const totalTasks: number = weekData?.totalTasks ?? 0
+  const completionMap: Record<string, number> = {}
+  const sessionMap: Record<string, any> = {}
+  const meetingMap: Record<string, { total: number; attended: number }> = {}
+
+  for (const c of (weekData?.completions || [])) completionMap[c.log_date] = Number(c.done)
+  for (const s of (weekData?.sessions   || [])) sessionMap[s.session_date] = s
+  for (const m of (weekData?.meetings   || [])) meetingMap[m.date] = { total: Number(m.total), attended: Number(m.attended) }
+
+  const pastDays = days.filter(d => d <= today)
+  const weekDone = pastDays.reduce((s, d) => s + (completionMap[d] || 0), 0)
+  const weekTotal = pastDays.length * totalTasks
+  const weekPct  = weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0
+  const weekMinutes = days.reduce((s, d) => s + (sessionMap[d]?.total_minutes || 0), 0)
+  const workDays = days.filter(d => sessionMap[d]?.end_time).length
+
+  return (
+    <div className="p-5 space-y-4">
+      {/* Weekly summary */}
+      <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-4 text-white">
+        <p className="text-white/70 text-xs font-semibold uppercase tracking-wide mb-3">Weekly Performance</p>
+        <div className="flex items-center gap-4 mb-3">
+          <div>
+            <p className="text-5xl font-black leading-none">{weekPct}%</p>
+            <p className="text-white/60 text-xs mt-0.5">Task completion</p>
+          </div>
+          <div className="flex-1">
+            <div className="bg-white/20 rounded-full h-2.5 mt-1">
+              <div className="bg-white h-2.5 rounded-full" style={{ width: weekPct + '%' }} />
+            </div>
+            <p className="text-white/60 text-xs mt-1">{weekDone} of {weekTotal} tasks done</p>
           </div>
         </div>
-      )}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white/15 rounded-xl p-2 text-center">
+            <p className="text-sm font-black">{workDays}/5</p>
+            <p className="text-white/60 text-xs">Work Days</p>
+          </div>
+          <div className="bg-white/15 rounded-xl p-2 text-center">
+            <p className="text-sm font-black">{formatDur(weekMinutes)}</p>
+            <p className="text-white/60 text-xs">Total Time</p>
+          </div>
+          <div className="bg-white/15 rounded-xl p-2 text-center">
+            <p className="text-sm font-black">{totalTasks}</p>
+            <p className="text-white/60 text-xs">Daily Tasks</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Day rows */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-100">
+          {['M','T','W','T','F','S','S'].map((d, i) => (
+            <div key={i} className="text-center py-2 text-xs font-bold text-gray-400">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-px bg-gray-100">
+          {days.map((dateStr) => {
+            const isFuture = dateStr > today
+            const isToday  = dateStr === today
+            const done     = completionMap[dateStr] || 0
+            const pct      = totalTasks > 0 ? (done / totalTasks) * 100 : 0
+            const hasSess  = !!sessionMap[dateStr]?.end_time
+            const isSelected = selectedDay === dateStr
+            const dayNum   = new Date(dateStr + 'T00:00:00').getDate()
+
+            const bg = isFuture ? 'bg-white'
+              : pct >= 100 ? 'bg-emerald-50'
+              : pct >= 50  ? 'bg-amber-50'
+              : done > 0   ? 'bg-red-50'
+              : 'bg-gray-50'
+
+            const textColor = isFuture ? 'text-gray-300'
+              : pct >= 100 ? 'text-emerald-700'
+              : pct >= 50  ? 'text-amber-700'
+              : done > 0   ? 'text-red-600'
+              : 'text-gray-400'
+
+            return (
+              <button
+                key={dateStr}
+                onClick={() => !isFuture && setSelectedDay(isSelected ? null : dateStr)}
+                disabled={isFuture}
+                className={`h-14 flex flex-col items-center justify-center gap-0.5 relative transition-all ${bg} ${isSelected ? 'ring-2 ring-inset ring-indigo-500' : ''} ${isToday ? 'ring-2 ring-inset ring-indigo-300' : ''}`}
+              >
+                <span className={`text-xs font-bold ${textColor}`}>{dayNum}</span>
+                {!isFuture && totalTasks > 0 && (
+                  <span className="text-xs leading-none font-semibold" style={{ fontSize: 9, color: pct >= 100 ? '#059669' : pct >= 50 ? '#D97706' : done > 0 ? '#DC2626' : '#9CA3AF' }}>
+                    {done}/{totalTasks}
+                  </span>
+                )}
+                {hasSess && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-orange-400 rounded-full" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       {/* Legend */}
       <div className="flex items-center gap-3 justify-center flex-wrap">
@@ -518,7 +923,6 @@ function MonthlyReport() {
           { color: 'bg-emerald-500', label: 'All done' },
           { color: 'bg-amber-400',   label: 'Partial' },
           { color: 'bg-red-400',     label: 'Missed' },
-          { color: 'bg-gray-300',    label: 'No data' },
           { color: 'bg-orange-400',  label: 'Session' },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1">
@@ -528,14 +932,14 @@ function MonthlyReport() {
         ))}
       </div>
 
-      {/* Selected day detail — full breakdown */}
-      {selDateStr && (
+      {/* Selected day detail */}
+      {selectedDay && (
         <div className="bg-white rounded-2xl border border-indigo-100 overflow-hidden">
           <div className="px-4 py-3 border-b border-indigo-50 flex items-center justify-between"
             style={{ background: 'linear-gradient(to right, #EEF2FF, #F5F3FF)' }}>
             <div>
-              <p className="font-bold text-gray-800 text-sm">{fmtFullDate(selDateStr)}</p>
-              <p className="text-xs text-indigo-400">Full day report</p>
+              <p className="font-bold text-gray-800 text-sm">{fmtFullDate(selectedDay)}</p>
+              <p className="text-xs text-indigo-400">Day breakdown</p>
             </div>
             <button onClick={() => setSelectedDay(null)}
               className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
@@ -543,7 +947,7 @@ function MonthlyReport() {
             </button>
           </div>
           <div className="p-4">
-            <DayDetail date={selDateStr} compact />
+            <DayDetail date={selectedDay} compact />
           </div>
         </div>
       )}
@@ -555,44 +959,67 @@ function MonthlyReport() {
 export default function ReportPanel({ onClose }: { onClose: () => void }) {
   const [view, setView] = useState<View>('daily')
 
+  const viewLabels: Record<View, string> = {
+    daily:   'Daily breakdown',
+    weekly:  'This week',
+    monthly: 'Monthly overview',
+    project: 'Project report',
+  }
+
+  const isWideView = view === 'monthly' || view === 'project'
+
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={onClose}>
       <div
-        className="bg-gray-50 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
+        className={'bg-white w-full rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 '
+          + (isWideView ? 'sm:max-w-5xl max-h-[95vh]' : 'sm:max-w-lg max-h-[90vh]')}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-white px-5 pt-5 pb-0 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center">
-                <IconBarChart size={16} className="text-white" />
+        <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1E3A5F 0%, #2E4D8A 100%)' }}>
+          <div className="px-6 pt-5 pb-0">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                  <IconBarChart size={18} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="font-black text-white text-lg leading-tight">Performance</h2>
+                  <p className="text-white/60 text-xs">{viewLabels[view]}</p>
+                </div>
               </div>
-              <div>
-                <h2 className="font-black text-gray-900 text-base">Reports</h2>
-                <p className="text-xs text-gray-400">
-                  {view === 'daily' ? 'Daily breakdown' : 'Monthly overview'}
-                </p>
-              </div>
-            </div>
-            <button onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
-              <IconX size={16} className="text-gray-600" />
-            </button>
-          </div>
-          <div className="flex bg-gray-100 rounded-xl p-1 mb-0">
-            {(['daily', 'monthly'] as View[]).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className={'flex-1 py-2 rounded-lg text-xs font-bold capitalize transition-all ' +
-                  (view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
-                {v === 'daily' ? 'Daily' : 'Monthly'}
+              <button onClick={onClose}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                <IconX size={16} className="text-white" />
               </button>
-            ))}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1">
+              {([
+                { v: 'daily',   label: 'Daily',   icon: '📅' },
+                { v: 'weekly',  label: 'Weekly',  icon: '📆' },
+                { v: 'monthly', label: 'Monthly', icon: '🗓️' },
+                { v: 'project', label: 'Project', icon: '📋' },
+              ] as { v: View; label: string; icon: string }[]).map(({ v, label, icon }) => (
+                <button key={v} onClick={() => setView(v)}
+                  className={'flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-lg transition-all border-b-2 '
+                    + (view === v
+                      ? 'bg-white text-gray-900 border-white'
+                      : 'text-white/60 hover:text-white/90 border-transparent hover:bg-white/10')}>
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1">
-          {view === 'daily' ? <DailyReport /> : <MonthlyReport />}
+        <div className="overflow-y-auto flex-1 bg-gray-50">
+          {view === 'daily'   && <DailyReport />}
+          {view === 'weekly'  && <WeeklyReport />}
+          {view === 'monthly' && <MonthlyReport />}
+          {view === 'project' && <ProjectReport />}
         </div>
       </div>
     </div>

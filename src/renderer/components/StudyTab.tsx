@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { StudyItem } from '../../types/index'
 import {
-  IconBook, IconLayers, IconPlus, IconX,
-  IconChevronUp, IconChevronDown, IconActivity, IconEdit, IconClock,
+  IconBook, IconPlus, IconX, IconChevronUp, IconChevronDown, IconClock,
 } from './Icons'
 import RepeatPicker, { RepeatValue } from './RepeatPicker'
 import SubtaskList from './SubtaskList'
@@ -10,297 +9,132 @@ import SubtaskList from './SubtaskList'
 const api = (window as any).electronAPI
 type Category = 'professional' | 'language' | 'other'
 
-const CATS: { key: Category; label: string; accent: string; light: string }[] = [
-  { key: 'professional', label: 'Professional', accent: '#2563EB', light: '#EFF6FF' },
-  { key: 'language',     label: 'Language',     accent: '#059669', light: '#F0FDF4' },
-  { key: 'other',        label: 'Other',        accent: '#D97706', light: '#FFFBEB' },
+const CATS: { key: Category; label: string; accent: string; bg: string; icon: string }[] = [
+  { key: 'professional', label: 'Professional', accent: '#2563EB', bg: 'bg-blue-50',   icon: '💼' },
+  { key: 'language',     label: 'Language',     accent: '#059669', bg: 'bg-emerald-50', icon: '🌐' },
+  { key: 'other',        label: 'Other',        accent: '#D97706', bg: 'bg-amber-50',   icon: '📚' },
 ]
 
-const defaultRepeat = (): RepeatValue => ({ repeat_type: 'daily', repeat_days: [1,2,3,4,5], repeat_dates: [] })
+function todayStr() { return new Date().toISOString().slice(0, 10) }
 
-// ─── Inline item form (add or edit) ─────────────────────────────────────────
-
-interface ItemFormProps {
-  accent: string
-  light: string
-  initial?: { title: string; notify_time: string; repeat: RepeatValue }
-  placeholder?: string
-  label?: string
-  onSave: (title: string, notify_time: string, repeat: RepeatValue) => void
-  onCancel: () => void
+function repeatLabel(days: string): string {
+  const nums = days.split(',').map(Number)
+  const weekdays = [1, 2, 3, 4, 5]
+  const weekend  = [6, 7]
+  if (nums.length === 7) return 'Everyday'
+  if (weekdays.every(d => nums.includes(d)) && nums.length === 5) return 'Weekdays'
+  if (weekend.every(d => nums.includes(d)) && nums.length === 2) return 'Weekends'
+  return ['', 'M', 'T', 'W', 'T', 'F', 'S', 'S'].filter((_, i) => nums.includes(i)).join('')
 }
 
-function ItemForm({ accent, light, initial, placeholder = 'Title...', label = 'Save', onSave, onCancel }: ItemFormProps) {
-  const [title, setTitle]       = useState(initial?.title ?? '')
-  const [time, setTime]         = useState(initial?.notify_time ?? '')
-  const [repeat, setRepeat]     = useState<RepeatValue>(initial?.repeat ?? defaultRepeat())
-
+// ── Add form ───────────────────────────────────────────────────────────────────
+interface AddFormProps {
+  accent: string
+  onSave: (title: string, time: string, repeat: RepeatValue) => void
+  onCancel: () => void
+}
+function AddForm({ accent, onSave, onCancel }: AddFormProps) {
+  const [title,  setTitle]  = useState('')
+  const [time,   setTime]   = useState('08:00')
+  const [repeat, setRepeat] = useState<RepeatValue>({
+    repeat_type: 'daily', repeat_days: [1,2,3,4,5], repeat_dates: [],
+  })
   return (
-    <form
-      onSubmit={e => { e.preventDefault(); onSave(title, time, repeat) }}
-      className="p-3.5 rounded-xl space-y-3 border mt-2"
-      style={{ backgroundColor: light, borderColor: accent + '30' }}
-    >
-      <input
-        required autoFocus
-        placeholder={placeholder}
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        className="w-full border rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2"
-        style={{ borderColor: accent + '40' }}
-      />
-      <div>
-        <label className="text-xs text-gray-500 block mb-1">Reminder time (optional)</label>
-        <input
-          type="time" value={time}
-          onChange={e => setTime(e.target.value)}
-          className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
-          style={{ borderColor: accent + '40' }}
-        />
-      </div>
+    <form onSubmit={e => { e.preventDefault(); onSave(title, time, repeat) }}
+      className="mt-3 p-3.5 rounded-xl space-y-3 border border-slate-100"
+      style={{ backgroundColor: accent + '08' }}>
+      <input required autoFocus placeholder="Topic / skill name..."
+        value={title} onChange={e => setTitle(e.target.value)}
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-300" />
+      <input type="time" value={time} onChange={e => setTime(e.target.value)}
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white" />
       <RepeatPicker value={repeat} onChange={setRepeat} accentColor={accent} />
       <div className="flex gap-2">
         <button type="submit" className="flex-1 text-white py-2 rounded-xl text-sm font-semibold"
-          style={{ backgroundColor: accent }}>{label}</button>
+          style={{ backgroundColor: accent }}>Save</button>
         <button type="button" onClick={onCancel}
-          className="flex-1 border border-gray-200 py-2 rounded-xl text-sm hover:bg-gray-50">Cancel</button>
+          className="flex-1 border border-slate-200 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
       </div>
     </form>
   )
 }
 
-// ─── Child skill card ────────────────────────────────────────────────────────
-
-interface ChildCardProps {
+// ── Edit form (inline, same as WorkTab) ────────────────────────────────────────
+interface EditFormProps {
+  accent: string
   item: StudyItem
-  accent: string
-  light: string
-  onUpdateProgress: (id: number, v: number) => void
-  onEdit: (item: StudyItem) => void
-  onDelete: (id: number) => void
-  isEditing: boolean
-  onSaveEdit: (title: string, time: string, repeat: RepeatValue) => void
-  onCancelEdit: () => void
+  onSave: (title: string, time: string, repeat: RepeatValue, progress: number) => void
+  onCancel: () => void
 }
-
-function ChildCard({ item, accent, light, onUpdateProgress, onEdit, onDelete, isEditing, onSaveEdit, onCancelEdit }: ChildCardProps) {
-  if (isEditing) {
-    const initRepeat: RepeatValue = {
-      repeat_type: 'daily',
-      repeat_days: item.notify_days ? item.notify_days.split(',').map(Number) : [1,2,3,4,5],
-      repeat_dates: [],
-    }
-    return (
-      <ItemForm
-        accent={accent} light={light}
-        initial={{ title: item.title, notify_time: item.notify_time || '', repeat: initRepeat }}
-        label="Update"
-        onSave={onSaveEdit}
-        onCancel={onCancelEdit}
-      />
-    )
-  }
-
+function EditForm({ accent, item, onSave, onCancel }: EditFormProps) {
+  const [title,    setTitle]    = useState(item.title)
+  const [time,     setTime]     = useState(item.notify_time || '08:00')
+  const [progress, setProgress] = useState(item.progress)
+  const [repeat,   setRepeat]   = useState<RepeatValue>({
+    repeat_type: 'daily',
+    repeat_days: item.notify_days ? item.notify_days.split(',').map(Number) : [1,2,3,4,5],
+    repeat_dates: [],
+  })
   return (
-    <div className="p-3 rounded-xl border border-gray-100 bg-white hover:shadow-sm transition-all">
-      <div className="flex items-start gap-2 mb-2">
-        <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: accent }} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800">{item.title}</p>
-          {item.notify_time && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <IconClock size={10} className="text-gray-400" />
-              <p className="text-xs text-gray-400">{item.notify_time}</p>
-            </div>
-          )}
+    <form onSubmit={e => { e.preventDefault(); onSave(title, time, repeat, progress) }}
+      className="p-3.5 rounded-xl space-y-3 border"
+      style={{ backgroundColor: accent + '08', borderColor: accent + '30' }}>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: accent }}>Edit Topic</p>
+      <input required autoFocus value={title} onChange={e => setTitle(e.target.value)}
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none" />
+      <input type="time" value={time} onChange={e => setTime(e.target.value)}
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white" />
+      <RepeatPicker value={repeat} onChange={setRepeat} accentColor={accent} />
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-slate-400">Mastery</label>
+          <span className="text-xs font-bold" style={{ color: accent }}>{progress}%</span>
         </div>
-        <span className="text-sm font-black flex-shrink-0" style={{ color: accent }}>{item.progress}%</span>
-        <button onClick={() => onEdit(item)} className="text-gray-300 hover:text-blue-400 transition-colors" title="Edit">
-          <IconEdit size={13} />
-        </button>
-        <button onClick={() => onDelete(item.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-          <IconX size={13} />
-        </button>
+        <input type="range" min={0} max={100} value={progress}
+          onChange={e => setProgress(Number(e.target.value))}
+          className="w-full h-1" style={{ accentColor: accent }} />
       </div>
-      <div className="bg-gray-100 rounded-full h-1.5 mb-1.5">
-        <div className="h-1.5 rounded-full transition-all" style={{ width: item.progress + '%', backgroundColor: accent }} />
+      <div className="flex gap-2">
+        <button type="submit" className="flex-1 text-white py-2 rounded-xl text-sm font-semibold"
+          style={{ backgroundColor: accent }}>Save</button>
+        <button type="button" onClick={onCancel}
+          className="flex-1 border border-slate-200 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
       </div>
-      <input
-        type="range" min={0} max={100} value={item.progress}
-        onChange={e => onUpdateProgress(item.id, Number(e.target.value))}
-        className="w-full" style={{ accentColor: accent }}
-      />
-      <SubtaskList parentType="study" parentId={item.id} accentColor={accent} />
-    </div>
+    </form>
   )
 }
 
-// ─── Parent subject card ─────────────────────────────────────────────────────
-
-interface ParentCardProps {
-  parent: StudyItem
-  children: StudyItem[]
-  accent: string
-  light: string
-  onUpdateProgress: (id: number, v: number) => void
-  onDelete: (id: number) => void
-  onAddChild: (parentId: number, title: string, time: string, repeat: RepeatValue) => void
-  onEditItem: (item: StudyItem) => void
-  editingId: number | null
-  onSaveEdit: (id: number, title: string, time: string, repeat: RepeatValue) => void
-  onCancelEdit: () => void
-}
-
-function ParentCard({
-  parent, children, accent, light,
-  onUpdateProgress, onDelete, onAddChild,
-  onEditItem, editingId, onSaveEdit, onCancelEdit,
-}: ParentCardProps) {
-  const [open, setOpen]         = useState(true)
-  const [showChildForm, setShowChildForm] = useState(false)
-
-  const avgProgress = children.length
-    ? Math.round(children.reduce((s, c) => s + c.progress, 0) / children.length)
-    : parent.progress
-
-  const isEditingParent = editingId === parent.id
-
-  return (
-    <div className="rounded-xl border-2 overflow-hidden" style={{ borderColor: accent + '30' }}>
-      {/* Parent header */}
-      <div
-        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer"
-        style={{ background: `linear-gradient(to right, ${light}, white)` }}
-      >
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex items-center gap-2 flex-1 min-w-0 text-left"
-        >
-          <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: accent }}>
-            <IconLayers size={11} className="text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-800 truncate">{parent.title}</p>
-            <p className="text-xs text-gray-400">{children.length} skill{children.length !== 1 ? 's' : ''} · {avgProgress}% avg</p>
-          </div>
-          {/* Mini progress bar */}
-          <div className="w-20 bg-gray-200 rounded-full h-1.5 flex-shrink-0">
-            <div className="h-1.5 rounded-full transition-all" style={{ width: avgProgress + '%', backgroundColor: accent }} />
-          </div>
-          <span className="text-xs font-black flex-shrink-0" style={{ color: accent }}>{avgProgress}%</span>
-          {open ? <IconChevronUp size={14} className="text-gray-400" /> : <IconChevronDown size={14} className="text-gray-400" />}
-        </button>
-        <button onClick={() => onEditItem(parent)} className="text-gray-300 hover:text-blue-400 transition-colors flex-shrink-0" title="Edit subject">
-          <IconEdit size={13} />
-        </button>
-        <button
-          onClick={() => { setShowChildForm(v => !v); setOpen(true) }}
-          className="flex items-center gap-0.5 text-white text-xs font-semibold px-2 py-1 rounded-lg flex-shrink-0"
-          style={{ backgroundColor: accent }}
-          title="Add skill"
-        >
-          <IconPlus size={11} />
-          <span>Skill</span>
-        </button>
-        <button onClick={() => onDelete(parent.id)} className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0">
-          <IconX size={14} />
-        </button>
-      </div>
-
-      {/* Edit parent form */}
-      {isEditingParent && (
-        <div className="px-3 pb-3">
-          <ItemForm
-            accent={accent} light={light}
-            initial={{
-              title: parent.title,
-              notify_time: parent.notify_time || '',
-              repeat: { repeat_type: 'daily', repeat_days: parent.notify_days ? parent.notify_days.split(',').map(Number) : [1,2,3,4,5], repeat_dates: [] },
-            }}
-            label="Update subject"
-            onSave={(t, time, rep) => onSaveEdit(parent.id, t, time, rep)}
-            onCancel={onCancelEdit}
-          />
-        </div>
-      )}
-
-      {/* Children */}
-      {open && !isEditingParent && (
-        <div className="px-3 pb-3 space-y-2 pt-2">
-          {showChildForm && (
-            <ItemForm
-              accent={accent} light={light}
-              placeholder="Skill name (e.g. Listening, Reading...)"
-              label="Add skill"
-              onSave={(t, time, rep) => { onAddChild(parent.id, t, time, rep); setShowChildForm(false) }}
-              onCancel={() => setShowChildForm(false)}
-            />
-          )}
-
-          {children.length === 0 && !showChildForm ? (
-            <div className="py-3 text-center">
-              <p className="text-xs text-gray-400">No skills yet — click <strong>Skill</strong> to add one.</p>
-            </div>
-          ) : (
-            children.map(child => (
-              <ChildCard
-                key={child.id}
-                item={child}
-                accent={accent} light={light}
-                onUpdateProgress={onUpdateProgress}
-                onEdit={onEditItem}
-                onDelete={onDelete}
-                isEditing={editingId === child.id}
-                onSaveEdit={(t, time, rep) => onSaveEdit(child.id, t, time, rep)}
-                onCancelEdit={onCancelEdit}
-              />
-            ))
-          )}
-
-          {/* Parent's own progress if no children */}
-          {children.length === 0 && !showChildForm && (
-            <div className="mt-1">
-              <div className="bg-gray-100 rounded-full h-1.5 mb-1">
-                <div className="h-1.5 rounded-full transition-all" style={{ width: parent.progress + '%', backgroundColor: accent }} />
-              </div>
-              <input
-                type="range" min={0} max={100} value={parent.progress}
-                onChange={e => onUpdateProgress(parent.id, Number(e.target.value))}
-                className="w-full" style={{ accentColor: accent }}
-              />
-              <SubtaskList parentType="study" parentId={parent.id} accentColor={accent} />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Main StudyTab ───────────────────────────────────────────────────────────
-
+// ── Main StudyTab ──────────────────────────────────────────────────────────────
 export default function StudyTab() {
-  const [items, setItems]         = useState<StudyItem[]>([])
-  const [openCats, setOpenCats]   = useState<Set<Category>>(new Set(['professional', 'language', 'other']))
-  const [showForm, setShowForm]   = useState<Category | null>(null)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [items,        setItems]        = useState<StudyItem[]>([])
+  const [completedIds, setCompletedIds] = useState<Set<number>>(new Set())
+  const [openCats,     setOpenCats]     = useState<Set<Category>>(new Set(['professional','language','other']))
+  const [showForm,     setShowForm]     = useState<Category | null>(null)
+  const [editingId,    setEditingId]    = useState<number | null>(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
-    const data = await api.getStudyItems()
-    setItems(data || [])
+    const data: StudyItem[] = (await api.getStudyItems()) || []
+    setItems(data)
+    setCompletedIds(new Set(data.filter(i => !!i.completed_at).map(i => i.id)))
   }
 
   function toggleCat(cat: Category) {
-    setOpenCats(prev => {
-      const n = new Set(prev)
-      n.has(cat) ? n.delete(cat) : n.add(cat)
-      return n
-    })
+    setOpenCats(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n })
   }
 
-  async function addParent(cat: Category, title: string, time: string, repeat: RepeatValue) {
+  async function complete(id: number) {
+    setCompletedIds(prev => new Set([...prev, id]))
+    await api.completeStudy(id, todayStr())
+  }
+
+  async function uncomplete(id: number) {
+    setCompletedIds(prev => { const n = new Set(prev); n.delete(id); return n })
+    await api.uncompleteStudy(id, todayStr())
+  }
+
+  async function addItem(cat: Category, title: string, time: string, repeat: RepeatValue) {
     await api.createStudyItem({
       title, category: cat, parent_id: null,
       notify_time: time || null,
@@ -310,162 +144,187 @@ export default function StudyTab() {
     load()
   }
 
-  async function addChild(parentId: number, cat: Category, title: string, time: string, repeat: RepeatValue) {
-    await api.createStudyItem({
-      title, category: cat, parent_id: parentId,
-      notify_time: time || null,
-      notify_days: repeat.repeat_days.join(','),
-    })
-    load()
-  }
-
-  async function saveEdit(id: number, title: string, time: string, repeat: RepeatValue) {
+  async function saveEdit(id: number, title: string, time: string, repeat: RepeatValue, progress: number) {
     await api.updateStudyItem(id, {
-      title,
-      notify_time: time || null,
-      notify_days: repeat.repeat_days.join(','),
+      title, notify_time: time || null, notify_days: repeat.repeat_days.join(','),
     })
+    await api.updateStudyProgress(id, progress)
     setEditingId(null)
     load()
   }
 
-  async function updateProgress(id: number, progress: number) {
-    await api.updateStudyProgress(id, progress)
-    setItems(p => p.map(i => i.id === id ? { ...i, progress } : i))
-  }
-
   async function remove(id: number) {
-    // also remove children
+    if (!confirm('Remove this topic?')) return
     const children = items.filter(i => i.parent_id === id)
     for (const c of children) await api.deleteStudyItem(c.id)
     await api.deleteStudyItem(id)
     load()
   }
 
-  const allTopLevel  = items.filter(i => !i.parent_id)
-  const overallAvg   = allTopLevel.length
-    ? Math.round(allTopLevel.reduce((s, i) => {
-        const children = items.filter(c => c.parent_id === i.id)
-        const avg = children.length
-          ? children.reduce((a, c) => a + c.progress, 0) / children.length
-          : i.progress
-        return s + avg
-      }, 0) / allTopLevel.length)
-    : 0
+  // Summary
+  const doneCount = completedIds.size
+  const totalCount = items.length
+  const dailyPct = totalCount ? Math.round((doneCount / totalCount) * 100) : 0
 
   return (
     <div className="space-y-3">
-      {/* Overall summary */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-            <IconActivity size={15} className="text-white" />
+      {/* Summary strip */}
+      <div className="bg-white rounded-2xl px-4 py-3.5 border border-slate-100 shadow-sm flex items-center gap-4">
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Learning — Today</p>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-bold text-slate-800">{doneCount}</span>
+            <span className="text-sm text-slate-400">/ {totalCount} done</span>
+            <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-lg ml-1">{dailyPct}%</span>
           </div>
-          <div className="flex-1">
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Overall Learning Progress</p>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 bg-gray-100 rounded-full h-2">
-                <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: overallAvg + '%' }} />
-              </div>
-              <span className="text-sm font-black text-emerald-600">{overallAvg}%</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-black text-gray-800">{allTopLevel.length}</p>
-            <p className="text-xs text-gray-400">subjects</p>
+        </div>
+        <div className="w-24">
+          <div className="bg-slate-100 rounded-full h-1.5">
+            <div className="bg-emerald-500 h-1.5 rounded-full transition-all" style={{ width: dailyPct + '%' }} />
           </div>
         </div>
       </div>
 
+      {/* Category sections */}
       {CATS.map(cat => {
-        const parents   = items.filter(i => i.category === cat.key && !i.parent_id)
+        const catItems  = items.filter(i => i.category === cat.key)
         const open      = openCats.has(cat.key)
-
-        // category average = avg of parent avg (which may include children)
-        const catAvg = parents.length ? Math.round(parents.reduce((s, p) => {
-          const ch = items.filter(c => c.parent_id === p.id)
-          return s + (ch.length ? ch.reduce((a,c) => a + c.progress, 0) / ch.length : p.progress)
-        }, 0) / parents.length) : 0
+        const catDone   = catItems.filter(i => completedIds.has(i.id)).length
 
         return (
-          <div key={cat.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {/* Category header */}
-            <div
-              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer border-b border-gray-50"
-              style={{ background: `linear-gradient(to right, ${cat.light}, white)` }}
-              onClick={() => toggleCat(cat.key)}
-            >
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: cat.accent }}>
-                <IconBook size={14} className="text-white" />
+          <div key={cat.key} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            {/* Section header — same pattern as WorkTab */}
+            <div className="flex items-center gap-3 px-4 py-3 cursor-pointer border-b border-slate-50"
+              onClick={() => toggleCat(cat.key)}>
+              <div className={'w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 text-sm ' + cat.bg}>
+                {cat.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-gray-800 text-sm">{cat.label}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs text-gray-500">{parents.length} subject{parents.length !== 1 ? 's' : ''}</p>
-                  {parents.length > 0 && (
-                    <>
-                      <span className="text-gray-300">·</span>
-                      <div className="flex items-center gap-1">
-                        <div className="w-16 bg-gray-200 rounded-full h-1">
-                          <div className="h-1 rounded-full" style={{ width: catAvg + '%', backgroundColor: cat.accent }} />
-                        </div>
-                        <span className="text-xs font-semibold" style={{ color: cat.accent }}>{catAvg}%</span>
-                      </div>
-                    </>
-                  )}
-                </div>
+                <p className="font-semibold text-slate-800 text-sm">{cat.label}</p>
+                <p className="text-xs text-slate-400">{catDone} of {catItems.length} done today</p>
               </div>
               <button
-                onClick={e => { e.stopPropagation(); setShowForm(showForm === cat.key ? null : cat.key) }}
-                className="flex items-center gap-1 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
-                style={{ backgroundColor: cat.accent }}
+                onClick={e => { e.stopPropagation(); setShowForm(showForm === cat.key ? null : cat.key); setEditingId(null) }}
+                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition-colors"
+                style={{ color: cat.accent, borderColor: cat.accent + '30', backgroundColor: cat.accent + '10' }}
               >
-                <IconPlus size={13} />
-                <span>Subject</span>
+                <IconPlus size={12} />
+                <span>Add</span>
               </button>
-              {open ? <IconChevronUp size={16} className="text-gray-400" /> : <IconChevronDown size={16} className="text-gray-400" />}
+              {open ? <IconChevronUp size={15} className="text-slate-300" /> : <IconChevronDown size={15} className="text-slate-300" />}
             </div>
 
             {open && (
               <div className="px-4 pb-4">
-                {/* Add subject form */}
+                {/* Add form */}
                 {showForm === cat.key && (
-                  <ItemForm
-                    accent={cat.accent} light={cat.light}
-                    placeholder="Subject name (e.g. IELTS, Python, Japanese...)"
-                    label="Add subject"
-                    onSave={(t, time, rep) => addParent(cat.key, t, time, rep)}
+                  <AddForm
+                    accent={cat.accent}
+                    onSave={(t, time, rep) => addItem(cat.key, t, time, rep)}
                     onCancel={() => setShowForm(null)}
                   />
                 )}
 
-                {parents.length === 0 && showForm !== cat.key ? (
-                  <div className="py-8 text-center">
-                    <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-2">
-                      <IconBook size={18} className="text-gray-300" />
+                {catItems.length === 0 && showForm !== cat.key ? (
+                  <div className="py-7 text-center">
+                    <div className="w-9 h-9 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-2">
+                      <IconBook size={17} className="text-slate-300" />
                     </div>
-                    <p className="text-gray-400 text-sm">No subjects yet.</p>
-                    <p className="text-gray-300 text-xs mt-0.5">Click <strong>Subject</strong> to add one.</p>
+                    <p className="text-slate-400 text-sm">No topics scheduled today.</p>
+                    <p className="text-slate-300 text-xs mt-0.5">Click <strong>Add</strong> to schedule one.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 mt-3">
-                    {parents.map(parent => {
-                      const children = items.filter(i => i.parent_id === parent.id)
+                  <div className="space-y-2 mt-3">
+                    {catItems.map(item => {
+                      const done = completedIds.has(item.id)
+
+                      // Inline edit form — same as WorkTab
+                      if (editingId === item.id) {
+                        return (
+                          <div key={item.id}>
+                            <EditForm
+                              accent={cat.accent}
+                              item={item}
+                              onSave={(t, time, rep, prog) => saveEdit(item.id, t, time, rep, prog)}
+                              onCancel={() => setEditingId(null)}
+                            />
+                          </div>
+                        )
+                      }
+
                       return (
-                        <ParentCard
-                          key={parent.id}
-                          parent={parent}
-                          children={children}
-                          accent={cat.accent}
-                          light={cat.light}
-                          onUpdateProgress={updateProgress}
-                          onDelete={remove}
-                          onAddChild={(pid, t, time, rep) => addChild(pid, cat.key, t, time, rep)}
-                          onEditItem={item => setEditingId(editingId === item.id ? null : item.id)}
-                          editingId={editingId}
-                          onSaveEdit={saveEdit}
-                          onCancelEdit={() => setEditingId(null)}
-                        />
+                        <div key={item.id}
+                          className={'px-3 py-2.5 rounded-xl border transition-all ' +
+                            (done
+                              ? 'bg-emerald-50/40 border-emerald-100/80'
+                              : 'bg-white border-slate-100 hover:border-slate-200/80 hover:shadow-sm')}
+                        >
+                          {/* Task row — identical layout to WorkTab */}
+                          <div className="flex items-center gap-3 cursor-pointer"
+                            onClick={() => !done && setEditingId(item.id)}>
+                            {/* Circle checkbox */}
+                            <button
+                              onClick={e => { e.stopPropagation(); done ? uncomplete(item.id) : complete(item.id) }}
+                              className={
+                                'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ' +
+                                (done ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 hover:border-emerald-400')
+                              }
+                            >
+                              {done && (
+                                <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                                  <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </button>
+
+                            {/* Title + meta */}
+                            <div className="flex-1 min-w-0">
+                              <p className={'text-sm font-medium ' + (done ? 'text-emerald-700' : 'text-slate-800')}>
+                                {item.title}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {item.notify_time && (
+                                  <div className="flex items-center gap-1">
+                                    <IconClock size={10} className="text-gray-400" />
+                                    <span className="text-xs text-gray-400">{item.notify_time}</span>
+                                  </div>
+                                )}
+                                <span className="text-xs text-gray-400">
+                                  {repeatLabel(item.notify_days || '1,2,3,4,5')}
+                                </span>
+                                {item.progress > 0 && (
+                                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md"
+                                    style={{ color: cat.accent, backgroundColor: cat.accent + '12' }}>
+                                    {item.progress}%
+                                  </span>
+                                )}
+                                {done && <span className="text-xs text-emerald-500 font-medium">Done today</span>}
+                                {item.parent_id && <span className="text-xs text-slate-300">sub-topic</span>}
+                              </div>
+                            </div>
+
+                            {/* Undo — same as WorkTab */}
+                            {done && (
+                              <button
+                                title="Reopen"
+                                onClick={e => { e.stopPropagation(); uncomplete(item.id) }}
+                                className="text-emerald-400 hover:text-amber-500 transition-colors text-xs font-bold px-1.5 py-0.5 rounded border border-emerald-200 hover:border-amber-300"
+                              >↩</button>
+                            )}
+
+                            {/* Delete */}
+                            <button
+                              onClick={e => { e.stopPropagation(); remove(item.id) }}
+                              className="text-gray-300 hover:text-red-400 transition-colors"
+                            >
+                              <IconX size={16} />
+                            </button>
+                          </div>
+
+                          {/* SubtaskList always visible below (same as WorkTab) */}
+                          <SubtaskList parentType="study" parentId={item.id}
+                            accentColor={cat.accent} />
+                        </div>
                       )
                     })}
                   </div>

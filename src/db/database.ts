@@ -108,6 +108,14 @@ function runMigrations() {
       notify_days  TEXT DEFAULT '1,2,3,4,5,6,7'
     );
 
+    CREATE TABLE IF NOT EXISTS study_logs (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id      INTEGER REFERENCES study_items(id),
+      log_date     TEXT NOT NULL,
+      completed_at TEXT,
+      notif_count  INTEGER DEFAULT 0
+    );
+
     CREATE TABLE IF NOT EXISTS work_sessions (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       session_date  TEXT NOT NULL,
@@ -184,6 +192,32 @@ function runMigrations() {
   try { db.run(`ALTER TABLE daily_tasks ADD COLUMN repeat_dates TEXT`) } catch {}
   try { db.run(`ALTER TABLE strategic_tasks ADD COLUMN reminder_days TEXT DEFAULT '1,2,3,4,5'`) } catch {}
   try { db.run(`ALTER TABLE strategic_tasks ADD COLUMN reminder_type TEXT DEFAULT 'daily'`) } catch {}
+  try { db.run(`ALTER TABLE meetings ADD COLUMN attended INTEGER DEFAULT NULL`) } catch {}
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      name            TEXT NOT NULL,
+      budget_planned  REAL DEFAULT 0,
+      budget_actual   REAL DEFAULT 0,
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+  `)
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS project_tasks (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id  INTEGER REFERENCES projects(id),
+      task_name   TEXT NOT NULL,
+      assigned_to TEXT DEFAULT '',
+      start_date  TEXT DEFAULT '',
+      end_date    TEXT DEFAULT '',
+      status      TEXT DEFAULT 'Not Started',
+      priority    TEXT DEFAULT 'High',
+      comments    TEXT DEFAULT '',
+      sort_order  INTEGER DEFAULT 0
+    );
+  `)
 
   saveDb()
 }

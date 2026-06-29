@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDailyTasks: () => ipcRenderer.invoke('db:getDailyTasks'),
   createDailyTask: (task: object) => ipcRenderer.invoke('db:createDailyTask', task),
   completeTask: (taskId: number, date: string) => ipcRenderer.invoke('db:completeTask', taskId, date),
+  uncompleteTask: (taskId: number, date: string) => ipcRenderer.invoke('db:uncompleteTask', taskId, date),
   deleteDailyTask: (id: number) => ipcRenderer.invoke('db:deleteDailyTask', id),
 
   // Strategic Tasks
@@ -14,12 +15,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateStrategicProgress: (id: number, progress: number) => ipcRenderer.invoke('db:updateStrategicProgress', id, progress),
   deleteStrategicTask: (id: number) => ipcRenderer.invoke('db:deleteStrategicTask', id),
 
+  // Projects
+  getProjects: () => ipcRenderer.invoke('db:getProjects'),
+  createProject: (data: object) => ipcRenderer.invoke('db:createProject', data),
+  updateProject: (id: number, data: object) => ipcRenderer.invoke('db:updateProject', id, data),
+  deleteProject: (id: number) => ipcRenderer.invoke('db:deleteProject', id),
+  getProjectTasks: (projectId: number) => ipcRenderer.invoke('db:getProjectTasks', projectId),
+  createProjectTask: (task: object) => ipcRenderer.invoke('db:createProjectTask', task),
+  updateProjectTask: (id: number, task: object) => ipcRenderer.invoke('db:updateProjectTask', id, task),
+  deleteProjectTask: (id: number) => ipcRenderer.invoke('db:deleteProjectTask', id),
+  exportProjectPDF: (projectId: number) => ipcRenderer.invoke('db:exportProjectPDF', projectId),
+  exportProjectExcel: (projectId: number) => ipcRenderer.invoke('db:exportProjectExcel', projectId),
+
   // Study Items
   getStudyItems: () => ipcRenderer.invoke('db:getStudyItems'),
   createStudyItem: (item: object) => ipcRenderer.invoke('db:createStudyItem', item),
   updateStudyProgress: (id: number, progress: number) => ipcRenderer.invoke('db:updateStudyProgress', id, progress),
   updateStudyItem: (id: number, item: object) => ipcRenderer.invoke('db:updateStudyItem', id, item),
   deleteStudyItem: (id: number) => ipcRenderer.invoke('db:deleteStudyItem', id),
+  completeStudy: (itemId: number, date: string) => ipcRenderer.invoke('db:completeStudy', itemId, date),
+  uncompleteStudy: (itemId: number, date: string) => ipcRenderer.invoke('db:uncompleteStudy', itemId, date),
 
   // Daily Task edit
   updateDailyTask: (id: number, task: object) => ipcRenderer.invoke('db:updateDailyTask', id, task),
@@ -33,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createMeeting: (m: object) => ipcRenderer.invoke('db:createMeeting', m),
   updateMeeting: (id: number, m: object) => ipcRenderer.invoke('db:updateMeeting', id, m),
   deleteMeeting: (id: number) => ipcRenderer.invoke('db:deleteMeeting', id),
+  setMeetingAttended: (id: number, attended: number | null) => ipcRenderer.invoke('db:setMeetingAttended', id, attended),
 
   // Subtasks
   getSubtasks: (parentType: string, parentId: number) => ipcRenderer.invoke('db:getSubtasks', parentType, parentId),
@@ -67,4 +83,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Time summary
   getDailySummary: (date: string) => ipcRenderer.invoke('db:getDailySummary', date),
   getMonthlySummary: (year: number, month: number) => ipcRenderer.invoke('db:getMonthlySummary', year, month),
+  getWeeklyReport: (start: string, end: string) => ipcRenderer.invoke('db:getWeeklyReport', start, end),
 })
