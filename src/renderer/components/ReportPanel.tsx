@@ -302,16 +302,19 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
         </div>
       )}
 
-      {/* Study Progress */}
+      {/* Study Progress — overall only, not daily tracked */}
       {topStudy.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
               <IconBook size={13} className="text-emerald-600" />
             </div>
-            <p className="font-bold text-gray-800 text-sm flex-1">Study Progress <span className="font-normal text-gray-400 text-xs">(overall)</span></p>
+            <p className="font-bold text-gray-800 text-sm flex-1">Study Progress</p>
             <span className="text-xs font-bold text-emerald-600">{studyAvg}% avg</span>
           </div>
+          <p className="text-xs text-amber-500 bg-amber-50 rounded-lg px-3 py-1.5 mb-3 border border-amber-100">
+            📌 Tiến độ tổng hợp — không phản ánh hoạt động hôm nay
+          </p>
 
           {cats.map(cat => {
             const catParents = topStudy.filter((i: any) => i.category === cat.key)
@@ -323,16 +326,13 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
                   {catParents.map((parent: any) => {
                     const children = studyItems.filter((c: any) => c.parent_id === parent.id)
                     if (children.length > 0) {
-                      // Show parent with children expanded
                       const parentAvg = Math.round(children.reduce((a: number, c: any) => a + c.progress, 0) / children.length)
                       return (
                         <div key={parent.id} className="rounded-xl border border-gray-100 overflow-hidden">
-                          {/* Parent row */}
                           <div className="flex items-center gap-2 px-3 py-2" style={{ backgroundColor: cat.color + '10' }}>
                             <p className="text-xs font-bold flex-1" style={{ color: cat.color }}>{parent.title}</p>
                             <span className="text-xs font-black" style={{ color: cat.color }}>{parentAvg}%</span>
                           </div>
-                          {/* Children */}
                           <div className="px-3 py-2 space-y-2">
                             {children.map((child: any) => (
                               <div key={child.id}>
@@ -350,7 +350,6 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
                         </div>
                       )
                     }
-                    // Standalone (no children)
                     return (
                       <div key={parent.id}>
                         <div className="flex items-center gap-2 mb-1">
