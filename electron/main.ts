@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import * as dotenv from 'dotenv'
 import { initDb, execute } from '../src/db/database'
@@ -8,6 +8,46 @@ import { startScheduler, stopScheduler } from './scheduler'
 dotenv.config()
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuiting = false
+
+function getTrayIconPath(): string {
+  if (process.env.NODE_ENV === 'development') {
+    return join(__dirname, '../../build/icon.ico')
+  }
+  return join(__dirname, '../dist/icon.ico')
+}
+
+function showWindow() {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function createTray() {
+  const icon = nativeImage.createFromPath(getTrayIconPath())
+  tray = new Tray(icon)
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '📋 Mở Schedule Assistant',
+      click: showWindow,
+    },
+    { type: 'separator' },
+    {
+      label: 'Thoát hoàn toàn',
+      click: () => {
+        isQuiting = true
+        app.quit()
+      },
+    },
+  ])
+
+  tray.setToolTip('Schedule Assistant — chạy nền')
+  tray.setContextMenu(contextMenu)
+  tray.on('double-click', showWindow)
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -19,7 +59,7 @@ function createWindow() {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false, // cần cho iframe MSN Weather
+      webSecurity: false,
     },
     titleBarStyle: 'default',
     title: 'Schedule Assistant',
@@ -31,6 +71,18 @@ function createWindow() {
   } else {
     mainWindow.loadFile(join(__dirname, '../dist/index.html'))
   }
+
+  // Đóng cửa sổ → ẩn vào tray, KHÔNG thoát app
+  mainWindow.on('close', (event) => {
+    if (!isQuiting) {
+      event.preventDefault()
+      mainWindow?.hide()
+      tray?.displayBalloon({
+        title: 'Schedule Assistant',
+        content: 'Vẫn đang chạy nền. Double-click vào icon dưới taskbar để mở lại.',
+      })
+    }
+  })
 }
 
 // Xử lý deep link scheduleapp://complete?task_id=X&date=YYYY-MM-DD
@@ -53,30 +105,30 @@ function handleDeepLink(url: string) {
 }
 
 app.whenReady().then(async () => {
-  // Khởi tạo database (async vì sql.js dùng WebAssembly)
   await initDb()
-
-  // Đăng ký IPC handlers
   registerIpcHandlers(ipcMain)
-
   createWindow()
+  createTray()
 
-  // Khởi động scheduler (cron jobs)
-  startScheduler(mainWindow)
+  // Tự chạy cùng Windows (chạy nền khi khởi động máy)
+  app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
+
+  startScheduler(mainWindow, showWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
+app.on('before-quit', () => {
+  isQuiting = true
+})
+
 // Xử lý deep link trên Windows (second-instance)
 app.on('second-instance', (_event, commandLine) => {
   const url = commandLine.find((arg) => arg.startsWith('scheduleapp://'))
   if (url) handleDeepLink(url)
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-  }
+  showWindow()
 })
 
 // Xử lý deep link trên macOS
@@ -85,6 +137,9 @@ app.on('open-url', (_event, url) => {
 })
 
 app.on('window-all-closed', () => {
-  stopScheduler()
-  if (process.platform !== 'darwin') app.quit()
+  // KHÔNG quit — tray vẫn giữ app sống
+  if (process.platform !== 'darwin' && isQuiting) {
+    stopScheduler()
+    app.quit()
+  }
 })

@@ -760,7 +760,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
         const dateStr = `${year}-${pad(month)}-${pad(d)}`
         const { clause, params } = repeatParams(dateStr)
         const row = queryOne(
-          `SELECT COUNT(*) as count FROM daily_tasks WHERE is_active = 1 ${clause}`,
+          `SELECT COUNT(*) as count FROM daily_tasks dt WHERE dt.is_active = 1 ${clause}`,
           params
         )
         dailyTaskCounts[dateStr] = row?.count ?? 0

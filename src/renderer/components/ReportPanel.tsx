@@ -106,13 +106,11 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
   const totalMeetings    = meetings.length
   const meetingKpi       = totalMeetings > 0 ? Math.round((attendedMeetings / totalMeetings) * 100) : 100
 
-  // Score formula (weighted):
-  // Tasks 40% + Session hours 25% (proportional, 8h=full) + Meeting 15% + Study 20%
-  const sessionScore  = Math.min(25, Math.round((sessionMin / 480) * 25))
-  const meetingScore  = totalMeetings > 0 ? Math.round((attendedMeetings / totalMeetings) * 15) : 15
-  const score = Math.min(100, Math.round(
-    taskPct * 0.4 + sessionScore + meetingScore + studyAvg * 0.2
-  ))
+  // Score formula (weighted): Tasks 50% + Session 30% (8h=full) + Meetings 20%
+  // Study is overall progress (not daily), excluded from day score
+  const sessionScore = Math.min(30, Math.round((sessionMin / 480) * 30))
+  const meetingScore = totalMeetings > 0 ? Math.round((attendedMeetings / totalMeetings) * 20) : 20
+  const score = Math.min(100, Math.round(taskPct * 0.5 + sessionScore + meetingScore))
 
   const scoreGradient = score >= 85
     ? 'from-emerald-500 to-teal-600'
@@ -150,25 +148,20 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
           </div>
         </div>
         {/* KPI grid */}
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5">
           <div className="bg-white/15 rounded-xl p-2 text-center">
             <p className="text-sm font-black text-white">{taskPct}%</p>
             <p className="text-white/60 text-xs leading-tight">Tasks</p>
-            <p className="text-white/40" style={{ fontSize: 9 }}>40pts</p>
+            <p className="text-white/40" style={{ fontSize: 9 }}>50pts</p>
           </div>
           <div className="bg-white/15 rounded-xl p-2 text-center">
             <p className="text-sm font-black text-white">{sessionMin > 0 ? formatDur(sessionMin) : '—'}</p>
             <p className="text-white/60 text-xs leading-tight">Session</p>
-            <p className="text-white/40" style={{ fontSize: 9 }}>25pts</p>
+            <p className="text-white/40" style={{ fontSize: 9 }}>30pts</p>
           </div>
           <div className="bg-white/15 rounded-xl p-2 text-center">
             <p className="text-sm font-black text-white">{totalMeetings > 0 ? `${attendedMeetings}/${totalMeetings}` : '—'}</p>
             <p className="text-white/60 text-xs leading-tight">Meetings</p>
-            <p className="text-white/40" style={{ fontSize: 9 }}>15pts</p>
-          </div>
-          <div className="bg-white/15 rounded-xl p-2 text-center">
-            <p className="text-sm font-black text-white">{studyAvg}%</p>
-            <p className="text-white/60 text-xs leading-tight">Study</p>
             <p className="text-white/40" style={{ fontSize: 9 }}>20pts</p>
           </div>
         </div>
@@ -316,7 +309,7 @@ function DayDetail({ date, compact = false }: { date: string; compact?: boolean 
             <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
               <IconBook size={13} className="text-emerald-600" />
             </div>
-            <p className="font-bold text-gray-800 text-sm flex-1">Study Progress</p>
+            <p className="font-bold text-gray-800 text-sm flex-1">Study Progress <span className="font-normal text-gray-400 text-xs">(overall)</span></p>
             <span className="text-xs font-bold text-emerald-600">{studyAvg}% avg</span>
           </div>
 

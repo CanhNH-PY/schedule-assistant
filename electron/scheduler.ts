@@ -63,7 +63,7 @@ function shouldRunToday(task: {
   return false
 }
 
-export function startScheduler(win: BrowserWindow | null) {
+export function startScheduler(win: BrowserWindow | null, showWindow?: () => void) {
 
   // ── Every minute: Daily Task notifications ───────────────────────────────
   tasks.push(
@@ -185,6 +185,52 @@ export function startScheduler(win: BrowserWindow | null) {
           )
         }
       }
+    })
+  )
+
+  // ── 11:50 weekdays: Buổi sáng check-in ──────────────────────────────────
+  tasks.push(
+    cron.schedule('50 11 * * 1-5', () => {
+      if (isHoliday(getCurrentDate())) return
+      const today = getCurrentDate()
+      const done = (queryOne(
+        `SELECT COUNT(*) as c FROM daily_task_logs WHERE log_date = ? AND completed_at IS NOT NULL`, [today]
+      ) as any)?.c ?? 0
+      const total = (queryOne(
+        `SELECT COUNT(*) as c FROM daily_tasks WHERE is_active = 1`, []
+      ) as any)?.c ?? 0
+      const notif = new Notification({
+        title: '📋 Schedule Assistant — 11:50',
+        body: total > 0
+          ? `Buổi sáng: đã hoàn thành ${done}/${total} tasks. Click để cập nhật.`
+          : 'Đã đến 11:50 — Click để cập nhật tiến độ công việc.',
+        silent: false,
+      })
+      notif.on('click', () => { if (showWindow) showWindow() })
+      notif.show()
+    })
+  )
+
+  // ── 17:20 weekdays: Cuối ngày check-in ───────────────────────────────────
+  tasks.push(
+    cron.schedule('20 17 * * 1-5', () => {
+      if (isHoliday(getCurrentDate())) return
+      const today = getCurrentDate()
+      const done = (queryOne(
+        `SELECT COUNT(*) as c FROM daily_task_logs WHERE log_date = ? AND completed_at IS NOT NULL`, [today]
+      ) as any)?.c ?? 0
+      const total = (queryOne(
+        `SELECT COUNT(*) as c FROM daily_tasks WHERE is_active = 1`, []
+      ) as any)?.c ?? 0
+      const notif = new Notification({
+        title: '📋 Schedule Assistant — 17:20',
+        body: total > 0
+          ? `Cuối ngày: ${done}/${total} tasks hoàn thành. Click để tổng kết.`
+          : 'Đã đến 17:20 — Click để cập nhật và kết thúc ngày làm việc.',
+        silent: false,
+      })
+      notif.on('click', () => { if (showWindow) showWindow() })
+      notif.show()
     })
   )
 
